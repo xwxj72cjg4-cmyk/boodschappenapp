@@ -353,7 +353,9 @@ export default function ListClient({
                 Zoeken...
               </div>
             )}
-            {searchResults.map((group) => {
+            {[...searchResults]
+              .sort((a, b) => (a.lowestPrice ?? Infinity) - (b.lowestPrice ?? Infinity))
+              .map((group) => {
               // Show cheapest offers from different stores
               const storeOffers = group.offers
                 .sort((a, b) => a.price - b.price)
