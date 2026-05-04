@@ -68,9 +68,45 @@ export default function ListClient({
   const [searchResults, setSearchResults] = useState<SearchGroup[]>([]);
   const [searching, setSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [preferredStore, setPreferredStore] = useState<string | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Collect available store names from search results for filter buttons
+  const availableStores = useMemo(() => {
+    const storeMap = new Map<string, string>();
+    for (const g of searchResults) {
+      for (const o of g.offers) {
+        if (!storeMap.has(o.storeId)) storeMap.set(o.storeId, o.storeName);
+      }
+    }
+    return Array.from(storeMap.entries()).map(([id, name]) => ({ id, name }));
+  }, [searchResults]);
+
+  // Filter and sort results based on preferred store
+  const filteredResults = useMemo(() => {
+    let results = [...searchResults];
+    if (preferredStore) {
+      // Only show products available at the preferred store
+      results = results
+        .map((g) => ({
+          ...g,
+          offers: g.offers.filter((o) => o.storeId === preferredStore),
+          lowestPrice: g.offers
+            .filter((o) => o.storeId === preferredStore)
+            .reduce((min, o) => (o.price < min ? o.price : min), Infinity),
+        }))
+        .filter((g) => g.offers.length > 0)
+        .map((g) => ({
+          ...g,
+          lowestPrice: g.lowestPrice === Infinity ? null : g.lowestPrice,
+        }));
+    }
+    return results.sort(
+      (a, b) => (a.lowestPrice ?? Infinity) - (b.lowestPrice ?? Infinity),
+    );
+  }, [searchResults, preferredStore]);
 
   useEffect(() => {
     const channel = supabase
@@ -317,6 +353,35 @@ export default function ListClient({
         </section>
       )}
 
+      {/* Store filter */}
+      {availableStores.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+          <button
+            onClick={() => setPreferredStore(null)}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-colors ${
+              preferredStore === null
+                ? "bg-brand-600 border-brand-600 text-white"
+                : "bg-white border-slate-200 text-slate-600"
+            }`}
+          >
+            Alle winkels
+          </button>
+          {availableStores.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setPreferredStore(s.id === preferredStore ? null : s.id)}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-colors ${
+                preferredStore === s.id
+                  ? "bg-brand-600 border-brand-600 text-white"
+                  : "bg-white border-slate-200 text-slate-600"
+              }`}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Add item form with product search */}
       <div className="relative" ref={resultsRef}>
         <form onSubmit={addItem} className="bg-white rounded-2xl shadow-sm p-3 flex gap-2">
@@ -346,16 +411,14 @@ export default function ListClient({
         </form>
 
         {/* Search results dropdown */}
-        {showResults && (searchResults.length > 0 || searching) && (
+        {showResults && (filteredResults.length > 0 || searching) && (
           <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-2xl shadow-lg border border-slate-200 max-h-80 overflow-y-auto z-50">
-            {searching && searchResults.length === 0 && (
+            {searching && filteredResults.length === 0 && (
               <div className="p-4 text-center text-sm text-slate-500">
                 Zoeken...
               </div>
             )}
-            {[...searchResults]
-              .sort((a, b) => (a.lowestPrice ?? Infinity) - (b.lowestPrice ?? Infinity))
-              .map((group) => {
+            {filteredResults.map((group) => {
               // Show cheapest offers from different stores
               const storeOffers = group.offers
                 .sort((a, b) => a.price - b.price)
@@ -408,7 +471,7 @@ export default function ListClient({
                 </button>
               );
             })}
-            {!searching && searchResults.length > 0 && (
+            {!searching && filteredResults.length > 0 && (
               <div className="p-2 text-center">
                 <button
                   type="button"
