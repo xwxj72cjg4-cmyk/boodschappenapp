@@ -28,17 +28,10 @@ export default function HomeClient({
     setBusy(true);
     setError(null);
     try {
-      const { data: hh, error: e1 } = await supabase
-        .from("households")
-        .insert({ name: newName.trim() })
-        .select()
-        .single();
-      if (e1) throw e1;
-      const { error: e2 } = await supabase.from("household_members").insert({
-        household_id: hh.id,
-        user_id: userId,
+      const { error: e1 } = await supabase.rpc("create_household", {
+        hname: newName.trim(),
       });
-      if (e2) throw e2;
+      if (e1) throw e1;
       router.refresh();
       setNewName("");
     } catch (e) {
