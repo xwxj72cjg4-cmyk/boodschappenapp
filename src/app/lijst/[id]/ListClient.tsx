@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
@@ -23,6 +23,26 @@ type Household = {
   radius_km: number;
 };
 
+type SearchOffer = {
+  storeId: string;
+  storeName: string;
+  price: number;
+  imageUrl: string | null;
+  isCheapest: boolean;
+};
+
+type SearchGroup = {
+  id: string;
+  name: string;
+  brand: string | null;
+  imageUrl: string | null;
+  lowestPrice: number | null;
+  offers: SearchOffer[];
+};
+
+const formatPrice = (n: number) =>
+  new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
+
 export default function ListClient({
   household: initialHousehold,
   initialItems,
@@ -43,6 +63,14 @@ export default function ListClient({
   const [postal, setPostal] = useState(household.postal_code ?? "");
   const [radius, setRadius] = useState(household.radius_km);
   const [savingSettings, setSavingSettings] = useState(false);
+
+  // Product search state
+  const [searchResults, setSearchResults] = useState<SearchGroup[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const channel = supabase
@@ -85,10 +113,62 @@ export default function ListClient({
     };
   }, [supabase, household.id]);
 
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (resultsRef.current && !resultsRef.current.contains(e.target as Node)) {
+        setShowResults(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const searchProducts = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+    // Cancel previous request
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setSearching(true);
+    try {
+      const r = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+        signal: controller.signal,
+      });
+      if (!r.ok) throw new Error("search failed");
+      const json = await r.json();
+      setSearchResults(json.groups || []);
+      setShowResults(true);
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") {
+        setSearchResults([]);
+      }
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  const handleNameChange = (val: string) => {
+    setName(val);
+    // Debounce search
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (val.trim().length >= 2) {
+      searchTimeout.current = setTimeout(() => searchProducts(val.trim()), 400);
+    } else {
+      setSearchResults([]);
+      setShowResults(false);
+    }
+  };
+
   const addItem = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!name.trim() || busy) return;
     setBusy(true);
+    setShowResults(false);
     const { error } = await supabase.from("list_items").insert({
       household_id: household.id,
       name: name.trim(),
@@ -98,6 +178,27 @@ export default function ListClient({
     if (!error) {
       setName("");
       setQty(1);
+      setSearchResults([]);
+    }
+    setBusy(false);
+  };
+
+  const addFromSearch = async (group: SearchGroup) => {
+    const productName = group.brand
+      ? `${group.brand} ${group.name}`
+      : group.name;
+    setBusy(true);
+    setShowResults(false);
+    const { error } = await supabase.from("list_items").insert({
+      household_id: household.id,
+      name: productName,
+      qty,
+      added_by: userId,
+    });
+    if (!error) {
+      setName("");
+      setQty(1);
+      setSearchResults([]);
     }
     setBusy(false);
   };
@@ -152,7 +253,7 @@ export default function ListClient({
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <Link href="/" className="text-sm text-slate-500">
-            ← Terug
+            &larr; Terug
           </Link>
           <h1 className="text-2xl font-bold text-brand-700 truncate">
             {household.name}
@@ -162,7 +263,7 @@ export default function ListClient({
             {household.postal_code && (
               <>
                 {" "}
-                · {household.postal_code} · {household.radius_km} km
+                &middot; {household.postal_code} &middot; {household.radius_km} km
               </>
             )}
           </p>
@@ -171,7 +272,7 @@ export default function ListClient({
           href={`/shop?h=${household.id}`}
           className="rounded-xl bg-brand-600 text-white px-3 py-2 text-sm font-semibold whitespace-nowrap"
         >
-          Plan winkels →
+          Plan winkels &rarr;
         </Link>
       </header>
 
@@ -216,28 +317,109 @@ export default function ListClient({
         </section>
       )}
 
-      <form onSubmit={addItem} className="bg-white rounded-2xl shadow-sm p-3 flex gap-2">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Bijv. kipfilet gerookt"
-          className="flex-1 rounded-xl border border-slate-200 px-3 py-3"
-          autoFocus
-        />
-        <input
-          type="number"
-          min={1}
-          value={qty}
-          onChange={(e) => setQty(Math.max(1, parseInt(e.target.value || "1", 10)))}
-          className="w-16 rounded-xl border border-slate-200 px-2 py-3 text-center"
-        />
-        <button
-          disabled={busy || !name.trim()}
-          className="rounded-xl bg-brand-600 text-white px-4 font-semibold disabled:opacity-60"
-        >
-          +
-        </button>
-      </form>
+      {/* Add item form with product search */}
+      <div className="relative" ref={resultsRef}>
+        <form onSubmit={addItem} className="bg-white rounded-2xl shadow-sm p-3 flex gap-2">
+          <input
+            value={name}
+            onChange={(e) => handleNameChange(e.target.value)}
+            onFocus={() => {
+              if (searchResults.length > 0) setShowResults(true);
+            }}
+            placeholder="Zoek product (bijv. melk, pasta, kaas)"
+            className="flex-1 rounded-xl border border-slate-200 px-3 py-3"
+            autoFocus
+          />
+          <input
+            type="number"
+            min={1}
+            value={qty}
+            onChange={(e) => setQty(Math.max(1, parseInt(e.target.value || "1", 10)))}
+            className="w-16 rounded-xl border border-slate-200 px-2 py-3 text-center"
+          />
+          <button
+            disabled={busy || !name.trim()}
+            className="rounded-xl bg-brand-600 text-white px-4 font-semibold disabled:opacity-60"
+          >
+            +
+          </button>
+        </form>
+
+        {/* Search results dropdown */}
+        {showResults && (searchResults.length > 0 || searching) && (
+          <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-2xl shadow-lg border border-slate-200 max-h-80 overflow-y-auto z-50">
+            {searching && searchResults.length === 0 && (
+              <div className="p-4 text-center text-sm text-slate-500">
+                Zoeken...
+              </div>
+            )}
+            {searchResults.map((group) => {
+              // Show cheapest offers from different stores
+              const storeOffers = group.offers
+                .sort((a, b) => a.price - b.price)
+                .slice(0, 3);
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => addFromSearch(group)}
+                  className="w-full text-left p-3 flex items-start gap-3 hover:bg-slate-50 active:bg-slate-100 border-b border-slate-100 last:border-b-0"
+                >
+                  <div className="w-14 h-14 shrink-0 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center">
+                    {group.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={group.imageUrl}
+                        alt=""
+                        className="w-full h-full object-contain"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="text-slate-300 text-2xl">?</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm leading-tight truncate">
+                      {group.brand ? `${group.brand} ` : ""}
+                      {group.name}
+                    </p>
+                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                      {storeOffers.map((offer, i) => (
+                        <span
+                          key={`${offer.storeId}-${i}`}
+                          className={`text-xs ${
+                            offer.isCheapest
+                              ? "text-green-700 font-semibold"
+                              : "text-slate-500"
+                          }`}
+                        >
+                          {offer.storeName} {formatPrice(offer.price)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  {group.lowestPrice !== null && (
+                    <span className="text-sm font-semibold text-brand-700 whitespace-nowrap">
+                      {formatPrice(group.lowestPrice)}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+            {!searching && searchResults.length > 0 && (
+              <div className="p-2 text-center">
+                <button
+                  type="button"
+                  onClick={addItem}
+                  className="text-xs text-slate-500 underline"
+                >
+                  Of voeg &quot;{name}&quot; handmatig toe
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <section className="bg-white rounded-2xl shadow-sm overflow-hidden">
         {open.length === 0 ? (
@@ -255,7 +437,7 @@ export default function ListClient({
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{it.name}</p>
                     {it.qty > 1 && (
-                      <p className="text-xs text-slate-500">{it.qty}×</p>
+                      <p className="text-xs text-slate-500">{it.qty}&times;</p>
                     )}
                   </div>
                 </div>
@@ -286,7 +468,7 @@ export default function ListClient({
                     onClick={() => toggle(it)}
                     className="w-6 h-6 rounded-full bg-brand-500 text-white text-sm font-bold shrink-0"
                   >
-                    ✓
+                    &#10003;
                   </button>
                   <p className="flex-1 line-through truncate">{it.name}</p>
                 </div>
