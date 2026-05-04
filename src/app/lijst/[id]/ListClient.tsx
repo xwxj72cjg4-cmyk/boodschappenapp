@@ -353,37 +353,8 @@ export default function ListClient({
         </section>
       )}
 
-      {/* Store filter */}
-      {availableStores.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-          <button
-            onClick={() => setPreferredStore(null)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-colors ${
-              preferredStore === null
-                ? "bg-brand-600 border-brand-600 text-white"
-                : "bg-white border-slate-200 text-slate-600"
-            }`}
-          >
-            Alle winkels
-          </button>
-          {availableStores.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setPreferredStore(s.id === preferredStore ? null : s.id)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-colors ${
-                preferredStore === s.id
-                  ? "bg-brand-600 border-brand-600 text-white"
-                  : "bg-white border-slate-200 text-slate-600"
-              }`}
-            >
-              {s.name}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Add item form with product search */}
-      <div className="relative" ref={resultsRef}>
+      <div ref={resultsRef}>
         <form onSubmit={addItem} className="bg-white rounded-2xl shadow-sm p-3 flex gap-2">
           <input
             value={name}
@@ -410,9 +381,40 @@ export default function ListClient({
           </button>
         </form>
 
-        {/* Search results dropdown */}
+        {/* Store filter buttons */}
+        {availableStores.length > 0 && showResults && (
+          <div className="flex gap-2 overflow-x-auto py-2 -mx-1 px-1">
+            <button
+              type="button"
+              onClick={() => setPreferredStore(null)}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-colors ${
+                preferredStore === null
+                  ? "bg-brand-600 border-brand-600 text-white"
+                  : "bg-white border-slate-200 text-slate-600"
+              }`}
+            >
+              Alle winkels
+            </button>
+            {availableStores.map((s) => (
+              <button
+                type="button"
+                key={s.id}
+                onClick={() => setPreferredStore(s.id === preferredStore ? null : s.id)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-colors ${
+                  preferredStore === s.id
+                    ? "bg-brand-600 border-brand-600 text-white"
+                    : "bg-white border-slate-200 text-slate-600"
+                }`}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Search results */}
         {showResults && (filteredResults.length > 0 || searching) && (
-          <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-2xl shadow-lg border border-slate-200 max-h-80 overflow-y-auto z-50">
+          <div className="bg-white rounded-2xl shadow-lg border border-slate-200 max-h-80 overflow-y-auto">
             {searching && filteredResults.length === 0 && (
               <div className="p-4 text-center text-sm text-slate-500">
                 Zoeken...
