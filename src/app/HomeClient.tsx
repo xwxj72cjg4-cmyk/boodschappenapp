@@ -42,7 +42,8 @@ export default function HomeClient({
       router.refresh();
       setNewName("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Aanmaken mislukt");
+      const msg = e instanceof Error ? e.message : typeof e === "object" && e !== null && "message" in e ? String((e as Record<string, unknown>).message) : JSON.stringify(e);
+      setError(msg || "Aanmaken mislukt");
     } finally {
       setBusy(false);
     }
