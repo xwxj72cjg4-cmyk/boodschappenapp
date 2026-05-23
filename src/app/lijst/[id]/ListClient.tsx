@@ -551,6 +551,13 @@ export default function ListClient({
                 of &quot;Alle winkels&quot;.
               </div>
             )}
+            {!searching && preferredStore && filteredResults.length > 0 && (
+              <div className="px-3 py-2 text-xs font-semibold text-brand-700 bg-brand-50 sticky top-0">
+                {filteredResults.length} producten bij{" "}
+                {availableStores.find((s) => s.id === preferredStore)?.name ??
+                  preferredStore}
+              </div>
+            )}
             {filteredResults.map((group) => {
               const expanded = expandedId === group.id;
               const sortedOffers = [...group.offers].sort((a, b) =>
