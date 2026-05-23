@@ -138,6 +138,71 @@ const normalizeGroup = (g: RawGroup): ProductGroup => {
   };
 };
 
+// --- Ontdubbeling --------------------------------------------------------
+// Supermarkten (vooral AH) hebben soms meerdere productpagina's voor exact
+// hetzelfde artikel, met verschillende prijzen — vaak een verouderde pagina
+// zonder barcode naast de actuele. We voegen die samen tot één product en
+// houden per winkel alleen de goedkoopste aanbieding.
+
+const normalizeTitle = (s: string): string =>
+  s
+    .toLowerCase()
+    .replace(
+      /\b\d+(?:[.,]\d+)?\s*(?:st|stuks?|stuk|x|g|gr|gram|ml|cl|l|kg)\b/g,
+      " ",
+    )
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const dedupeKey = (g: ProductGroup): string =>
+  `${normalizeTitle(`${g.brand ?? ""} ${g.name}`)}|p:${g.pkg.pieceCount ?? ""}`;
+
+const cheapestOfferPrice = (g: ProductGroup): number =>
+  g.offers.reduce((m, o) => (o.price < m ? o.price : m), Infinity);
+
+const mergeGroups = (bucket: ProductGroup[]): ProductGroup => {
+  // Representant = goedkoopste variant (heeft meestal de actuele, nette data).
+  const sorted = [...bucket].sort(
+    (a, b) => cheapestOfferPrice(a) - cheapestOfferPrice(b),
+  );
+  const rep = sorted[0];
+
+  // Combineer alle aanbiedingen, hou per winkel de goedkoopste.
+  const bestByStore = new Map<string, Offer>();
+  for (const g of bucket) {
+    for (const o of g.offers) {
+      const cur = bestByStore.get(o.storeId);
+      if (!cur || o.price < cur.price) bestByStore.set(o.storeId, o);
+    }
+  }
+  const offers = [...bestByStore.values()].sort((a, b) => a.price - b.price);
+  const minPrice = offers.length ? offers[0].price : null;
+  offers.forEach((o) => (o.isCheapest = o.price === minPrice));
+
+  const unitPrices = offers
+    .map((o) => o.unitPrice)
+    .filter((v): v is number => v != null);
+
+  return {
+    ...rep,
+    offers,
+    lowestPrice: minPrice,
+    lowestUnitPrice: unitPrices.length ? Math.min(...unitPrices) : rep.lowestUnitPrice,
+  };
+};
+
+const dedupeGroups = (groups: ProductGroup[]): ProductGroup[] => {
+  const buckets = new Map<string, ProductGroup[]>();
+  for (const g of groups) {
+    const key = dedupeKey(g);
+    const arr = buckets.get(key);
+    if (arr) arr.push(g);
+    else buckets.set(key, [g]);
+  }
+  return [...buckets.values()].map((b) => (b.length === 1 ? b[0] : mergeGroups(b)));
+};
+
 export type LocationOpts = {
   postalCode?: string | null;
   radiusKm?: number | null;
@@ -163,9 +228,10 @@ export async function searchProducts(
   });
   if (!r.ok) throw new Error(`WinkelMaatje search failed: ${r.status}`);
   const json: RawSearchResponse = await r.json();
-  return (json.results || [])
+  const groups = (json.results || [])
     .map(normalizeGroup)
     .filter((g) => g.offers.length > 0);
+  return dedupeGroups(groups);
 }
 
 export async function listStores(opts?: LocationOpts): Promise<Store[]> {
