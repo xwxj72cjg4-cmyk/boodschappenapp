@@ -19,7 +19,7 @@ export default async function ListPage({ params }: { params: { id: string } }) {
 
   const { data: items } = await supabase
     .from("list_items")
-    .select("id, name, qty, checked, added_by, created_at")
+    .select("id, name, qty, checked, added_by, created_at, image_url, price")
     .eq("household_id", hh.id)
     .order("checked", { ascending: true })
     .order("created_at", { ascending: true });

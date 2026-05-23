@@ -10,11 +10,20 @@ export type Store = {
   distanceKm: number | null;
 };
 
+export type Pkg = {
+  displayQuantity: number | null;
+  displayUnit: string | null;
+  pieceCount: number | null;
+  normalizedUnit: string | null;
+};
+
 export type Offer = {
   storeId: string;
   storeName: string;
   price: number;
-  unitPrice: number | null;
+  unitPrice: number | null; // prijs per genormaliseerde eenheid (per kg / per l)
+  pricePerPiece: number | null; // prijs per stuk, indien bekend
+  pkg: Pkg;
   url: string | null;
   imageUrl: string | null;
   isCheapest: boolean;
@@ -26,6 +35,8 @@ export type ProductGroup = {
   brand: string | null;
   imageUrl: string | null;
   lowestPrice: number | null;
+  lowestUnitPrice: number | null;
+  pkg: Pkg;
   offers: Offer[];
 };
 
@@ -42,12 +53,21 @@ type RawPricing = {
   promoPrice?: number | null;
   unitPrice?: number | null;
   lowestPrice?: number | null;
+  lowestUnitPrice?: number | null;
+};
+
+type RawPackage = {
+  displayQuantity?: number | null;
+  displayUnit?: string | null;
+  pieceCount?: number | null;
+  normalizedUnit?: string | null;
 };
 
 type RawOffer = {
   storeId?: string;
   storeName?: string;
   pricing?: RawPricing;
+  package?: RawPackage;
   sourceUrl?: string | null;
   imageUrl?: string | null;
   isCheapest?: boolean;
@@ -59,8 +79,16 @@ type RawGroup = {
   brand?: string | null;
   imageUrl?: string | null;
   pricing?: RawPricing;
+  package?: RawPackage;
   offers?: RawOffer[];
 };
+
+const normalizePkg = (p?: RawPackage | null): Pkg => ({
+  displayQuantity: p?.displayQuantity ?? null,
+  displayUnit: p?.displayUnit ?? null,
+  pieceCount: p?.pieceCount ?? null,
+  normalizedUnit: p?.normalizedUnit ?? null,
+});
 
 const offerPrice = (p?: RawPricing | null): number | null => {
   if (!p) return null;
@@ -74,14 +102,19 @@ const offerPrice = (p?: RawPricing | null): number | null => {
 const normalizeOffer = (
   o: RawOffer,
   groupImage: string | null,
+  groupPkg: Pkg,
 ): Offer | null => {
   const price = offerPrice(o.pricing);
   if (!o.storeId || price === null) return null;
+  const pkg = o.package ? normalizePkg(o.package) : groupPkg;
+  const pieces = pkg.pieceCount && pkg.pieceCount > 0 ? pkg.pieceCount : null;
   return {
     storeId: o.storeId,
     storeName: o.storeName || o.storeId,
     price,
     unitPrice: o.pricing?.unitPrice ?? null,
+    pricePerPiece: pieces ? price / pieces : null,
+    pkg,
     url: o.sourceUrl ?? null,
     imageUrl: o.imageUrl ?? groupImage ?? null,
     isCheapest: !!o.isCheapest,
@@ -90,14 +123,17 @@ const normalizeOffer = (
 
 const normalizeGroup = (g: RawGroup): ProductGroup => {
   const img = g.imageUrl ?? null;
+  const pkg = normalizePkg(g.package);
   return {
     id: g.groupId || "",
     name: g.title || "",
     brand: g.brand ?? null,
     imageUrl: img,
     lowestPrice: g.pricing?.lowestPrice ?? null,
+    lowestUnitPrice: g.pricing?.lowestUnitPrice ?? null,
+    pkg,
     offers: (g.offers || [])
-      .map((o) => normalizeOffer(o, img))
+      .map((o) => normalizeOffer(o, img, pkg))
       .filter((x): x is Offer => x !== null),
   };
 };

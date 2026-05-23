@@ -13,6 +13,8 @@ type Item = {
   checked: boolean;
   added_by: string | null;
   created_at: string;
+  image_url: string | null;
+  price: number | null;
 };
 
 type Household = {
@@ -23,10 +25,20 @@ type Household = {
   radius_km: number;
 };
 
+type Pkg = {
+  displayQuantity: number | null;
+  displayUnit: string | null;
+  pieceCount: number | null;
+  normalizedUnit: string | null;
+};
+
 type SearchOffer = {
   storeId: string;
   storeName: string;
   price: number;
+  unitPrice: number | null;
+  pricePerPiece: number | null;
+  pkg: Pkg;
   imageUrl: string | null;
   isCheapest: boolean;
 };
@@ -37,11 +49,46 @@ type SearchGroup = {
   brand: string | null;
   imageUrl: string | null;
   lowestPrice: number | null;
+  lowestUnitPrice: number | null;
+  pkg: Pkg;
   offers: SearchOffer[];
 };
 
+type SortMode = "price" | "unit";
+
 const formatPrice = (n: number) =>
   new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
+
+// Een korte omschrijving van de verpakking, bijv. "4 stuks · 300 g" of "1 l".
+const pkgLabel = (pkg: Pkg): string => {
+  const parts: string[] = [];
+  if (pkg.pieceCount && pkg.pieceCount > 0) {
+    parts.push(`${pkg.pieceCount} stuks`);
+  }
+  if (pkg.displayQuantity && pkg.displayUnit) {
+    parts.push(`${pkg.displayQuantity} ${pkg.displayUnit}`);
+  }
+  return parts.join(" · ");
+};
+
+// Prijs-per-eenheid label voor een aanbieding, bijv. "€0,15 p/st" of "€2,40 /kg".
+const unitLabel = (o: SearchOffer): string | null => {
+  if (o.pricePerPiece) return `${formatPrice(o.pricePerPiece)} p/st`;
+  if (o.unitPrice && o.pkg.normalizedUnit) {
+    return `${formatPrice(o.unitPrice)} /${o.pkg.normalizedUnit}`;
+  }
+  return null;
+};
+
+// Waarde waarop we sorteren in "per eenheid"-modus: per stuk indien bekend, anders per kg/l.
+const unitSortValue = (g: SearchGroup): number => {
+  const perPiece = g.offers
+    .map((o) => o.pricePerPiece)
+    .filter((v): v is number => v != null);
+  if (perPiece.length) return Math.min(...perPiece);
+  if (g.lowestUnitPrice != null) return g.lowestUnitPrice;
+  return g.lowestPrice ?? Infinity;
+};
 
 export default function ListClient({
   household: initialHousehold,
@@ -69,6 +116,8 @@ export default function ListClient({
   const [searching, setSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [preferredStore, setPreferredStore] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("unit");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -103,10 +152,13 @@ export default function ListClient({
           lowestPrice: g.lowestPrice === Infinity ? null : g.lowestPrice,
         }));
     }
-    return results.sort(
-      (a, b) => (a.lowestPrice ?? Infinity) - (b.lowestPrice ?? Infinity),
-    );
-  }, [searchResults, preferredStore]);
+    return results.sort((a, b) => {
+      if (sortMode === "unit") {
+        return unitSortValue(a) - unitSortValue(b);
+      }
+      return (a.lowestPrice ?? Infinity) - (b.lowestPrice ?? Infinity);
+    });
+  }, [searchResults, preferredStore, sortMode]);
 
   useEffect(() => {
     const channel = supabase
@@ -223,13 +275,42 @@ export default function ListClient({
     const productName = group.brand
       ? `${group.brand} ${group.name}`
       : group.name;
+    const cheapestOffer = group.offers.length
+      ? group.offers.reduce((a, b) => (a.price < b.price ? a : b))
+      : null;
     setBusy(true);
     setShowResults(false);
+    setExpandedId(null);
     const { error } = await supabase.from("list_items").insert({
       household_id: household.id,
       name: productName,
       qty,
       added_by: userId,
+      image_url: cheapestOffer?.imageUrl ?? group.imageUrl ?? null,
+      price: cheapestOffer?.price ?? group.lowestPrice ?? null,
+    });
+    if (!error) {
+      setName("");
+      setQty(1);
+      setSearchResults([]);
+    }
+    setBusy(false);
+  };
+
+  // Voeg een specifieke winkel-aanbieding toe (bv. de 10-pack van Lidl).
+  const addFromOffer = async (group: SearchGroup, offer: SearchOffer) => {
+    const baseName = group.brand ? `${group.brand} ${group.name}` : group.name;
+    const productName = `${baseName} (${offer.storeName})`;
+    setBusy(true);
+    setShowResults(false);
+    setExpandedId(null);
+    const { error } = await supabase.from("list_items").insert({
+      household_id: household.id,
+      name: productName,
+      qty,
+      added_by: userId,
+      image_url: offer.imageUrl ?? group.imageUrl ?? null,
+      price: offer.price,
     });
     if (!error) {
       setName("");
@@ -381,96 +462,184 @@ export default function ListClient({
           </button>
         </form>
 
-        {/* Store filter buttons */}
-        {availableStores.length > 0 && showResults && (
-          <div className="flex gap-2 overflow-x-auto py-2 -mx-1 px-1">
-            <button
-              type="button"
-              onClick={() => setPreferredStore(null)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-colors ${
-                preferredStore === null
-                  ? "bg-brand-600 border-brand-600 text-white"
-                  : "bg-white border-slate-200 text-slate-600"
-              }`}
-            >
-              Alle winkels
-            </button>
-            {availableStores.map((s) => (
+        {/* Sorteer- en winkelfilters */}
+        {showResults && filteredResults.length > 0 && (
+          <div className="space-y-2 pt-2">
+            <div className="flex gap-2">
               <button
                 type="button"
-                key={s.id}
-                onClick={() => setPreferredStore(s.id === preferredStore ? null : s.id)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-colors ${
-                  preferredStore === s.id
+                onClick={() => setSortMode("unit")}
+                className={`flex-1 rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-colors ${
+                  sortMode === "unit"
                     ? "bg-brand-600 border-brand-600 text-white"
                     : "bg-white border-slate-200 text-slate-600"
                 }`}
               >
-                {s.name}
+                Per stuk / kilo
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => setSortMode("price")}
+                className={`flex-1 rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-colors ${
+                  sortMode === "price"
+                    ? "bg-brand-600 border-brand-600 text-white"
+                    : "bg-white border-slate-200 text-slate-600"
+                }`}
+              >
+                Laagste prijs
+              </button>
+            </div>
+            {availableStores.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto -mx-1 px-1">
+                <button
+                  type="button"
+                  onClick={() => setPreferredStore(null)}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-colors ${
+                    preferredStore === null
+                      ? "bg-slate-800 border-slate-800 text-white"
+                      : "bg-white border-slate-200 text-slate-600"
+                  }`}
+                >
+                  Alle winkels
+                </button>
+                {availableStores.map((s) => (
+                  <button
+                    type="button"
+                    key={s.id}
+                    onClick={() =>
+                      setPreferredStore(s.id === preferredStore ? null : s.id)
+                    }
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-colors ${
+                      preferredStore === s.id
+                        ? "bg-slate-800 border-slate-800 text-white"
+                        : "bg-white border-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {/* Search results */}
         {showResults && (filteredResults.length > 0 || searching) && (
-          <div className="bg-white rounded-2xl shadow-lg border border-slate-200 max-h-80 overflow-y-auto">
+          <div className="mt-2 bg-white rounded-2xl shadow-lg border border-slate-200 max-h-[28rem] overflow-y-auto">
             {searching && filteredResults.length === 0 && (
               <div className="p-4 text-center text-sm text-slate-500">
                 Zoeken...
               </div>
             )}
             {filteredResults.map((group) => {
-              // Show cheapest offers from different stores
-              const storeOffers = group.offers
-                .sort((a, b) => a.price - b.price)
-                .slice(0, 3);
+              const expanded = expandedId === group.id;
+              const sortedOffers = [...group.offers].sort((a, b) =>
+                sortMode === "unit"
+                  ? (a.pricePerPiece ?? a.unitPrice ?? a.price) -
+                    (b.pricePerPiece ?? b.unitPrice ?? b.price)
+                  : a.price - b.price,
+              );
+              const headline = sortedOffers[0];
+              const pkgText = pkgLabel(group.pkg);
               return (
-                <button
+                <div
                   key={group.id}
-                  type="button"
-                  onClick={() => addFromSearch(group)}
-                  className="w-full text-left p-3 flex items-start gap-3 hover:bg-slate-50 active:bg-slate-100 border-b border-slate-100 last:border-b-0"
+                  className="border-b border-slate-100 last:border-b-0"
                 >
-                  <div className="w-14 h-14 shrink-0 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center">
-                    {group.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={group.imageUrl}
-                        alt=""
-                        className="w-full h-full object-contain"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <span className="text-slate-300 text-2xl">?</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm leading-tight truncate">
-                      {group.brand ? `${group.brand} ` : ""}
-                      {group.name}
-                    </p>
-                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
-                      {storeOffers.map((offer, i) => (
-                        <span
-                          key={`${offer.storeId}-${i}`}
-                          className={`text-xs ${
-                            offer.isCheapest
-                              ? "text-green-700 font-semibold"
-                              : "text-slate-500"
-                          }`}
-                        >
-                          {offer.storeName} {formatPrice(offer.price)}
-                        </span>
-                      ))}
+                  {/* Samenvattingsrij — tik om uit te klappen */}
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(expanded ? null : group.id)}
+                    className="w-full text-left p-3 flex items-start gap-3 hover:bg-slate-50 active:bg-slate-100"
+                  >
+                    <div className="w-14 h-14 shrink-0 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center">
+                      {group.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={group.imageUrl}
+                          alt=""
+                          className="w-full h-full object-contain"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span className="text-slate-300 text-2xl">?</span>
+                      )}
                     </div>
-                  </div>
-                  {group.lowestPrice !== null && (
-                    <span className="text-sm font-semibold text-brand-700 whitespace-nowrap">
-                      {formatPrice(group.lowestPrice)}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm leading-tight">
+                        {group.brand ? `${group.brand} ` : ""}
+                        {group.name}
+                      </p>
+                      {pkgText && (
+                        <p className="text-xs text-slate-400">{pkgText}</p>
+                      )}
+                      {headline && (
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          v.a. {formatPrice(headline.price)} bij{" "}
+                          {headline.storeName}
+                          {unitLabel(headline) && (
+                            <span className="text-green-700 font-semibold">
+                              {" "}
+                              · {unitLabel(headline)}
+                            </span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-slate-400 text-lg shrink-0 pl-1">
+                      {expanded ? "▾" : "›"}
                     </span>
+                  </button>
+
+                  {/* Uitgeklapt: alle winkels vergeleken */}
+                  {expanded && (
+                    <div className="px-3 pb-3 space-y-1">
+                      {sortedOffers.map((offer, i) => {
+                        const ppLabel = unitLabel(offer);
+                        const cheapestUnit = i === 0 && sortMode === "unit";
+                        return (
+                          <div
+                            key={`${offer.storeId}-${i}`}
+                            className={`flex items-center gap-2 rounded-xl px-3 py-2 ${
+                              cheapestUnit ? "bg-green-50" : "bg-slate-50"
+                            }`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium">
+                                {offer.storeName}
+                                {cheapestUnit && (
+                                  <span className="ml-2 text-[10px] font-bold text-green-700 uppercase">
+                                    voordeligst p/st
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {formatPrice(offer.price)}
+                                {ppLabel && <> · {ppLabel}</>}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => addFromOffer(group, offer)}
+                              disabled={busy}
+                              className="shrink-0 rounded-lg bg-brand-600 text-white px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                            >
+                              + Lijst
+                            </button>
+                          </div>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => addFromSearch(group)}
+                        disabled={busy}
+                        className="w-full text-center text-xs text-slate-500 underline pt-1"
+                      >
+                        Voeg goedkoopste automatisch toe
+                      </button>
+                    </div>
                   )}
-                </button>
+                </div>
               );
             })}
             {!searching && filteredResults.length > 0 && (
@@ -501,15 +670,48 @@ export default function ListClient({
                     className="w-6 h-6 rounded-full border-2 border-slate-300 shrink-0"
                     aria-label={`Vink ${it.name} af`}
                   />
+                  {it.image_url && (
+                    <div className="w-10 h-10 shrink-0 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={it.image_url}
+                        alt=""
+                        className="w-full h-full object-contain"
+                        loading="lazy"
+                      />
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{it.name}</p>
                     {it.qty > 1 && (
                       <p className="text-xs text-slate-500">{it.qty}&times;</p>
                     )}
                   </div>
+                  {it.price !== null && it.price !== undefined && (
+                    <span className="text-sm font-mono text-slate-600 whitespace-nowrap">
+                      {formatPrice(it.price * it.qty)}
+                    </span>
+                  )}
                 </div>
               </SwipeRow>
             ))}
+            {/* Geschat totaal */}
+            {open.some((i) => i.price !== null && i.price !== undefined) && (
+              <div className="flex items-center justify-between p-3 bg-slate-50">
+                <span className="text-sm font-semibold text-slate-600">
+                  Geschat totaal
+                </span>
+                <span className="text-sm font-bold font-mono text-brand-700">
+                  {formatPrice(
+                    open.reduce(
+                      (sum, i) =>
+                        sum + (i.price != null ? i.price * i.qty : 0),
+                      0,
+                    ),
+                  )}
+                </span>
+              </div>
+            )}
           </div>
         )}
       </section>
