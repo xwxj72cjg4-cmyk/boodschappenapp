@@ -476,7 +476,7 @@ export default function ListClient({
         </form>
 
         {/* Sorteer- en winkelfilters */}
-        {showResults && filteredResults.length > 0 && (
+        {showResults && availableStores.length > 0 && (
           <div className="space-y-2 pt-2">
             <div className="flex gap-2">
               <button
@@ -537,11 +537,18 @@ export default function ListClient({
         )}
 
         {/* Search results */}
-        {showResults && (filteredResults.length > 0 || searching) && (
+        {showResults &&
+          (filteredResults.length > 0 || searching || availableStores.length > 0) && (
           <div className="mt-2 bg-white rounded-2xl shadow-lg border border-slate-200 max-h-[28rem] overflow-y-auto">
             {searching && filteredResults.length === 0 && (
               <div className="p-4 text-center text-sm text-slate-500">
                 Zoeken...
+              </div>
+            )}
+            {!searching && filteredResults.length === 0 && (
+              <div className="p-4 text-center text-sm text-slate-500">
+                Geen producten gevonden bij deze winkel. Kies een andere winkel
+                of &quot;Alle winkels&quot;.
               </div>
             )}
             {filteredResults.map((group) => {

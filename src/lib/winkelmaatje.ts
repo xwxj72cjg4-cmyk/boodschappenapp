@@ -123,7 +123,9 @@ const normalizeOffer = (
     storeName: o.storeName || o.storeId,
     price,
     regularPrice: regular,
-    promoLabel: o.pricing?.promoLabel ?? null,
+    promoLabel: o.pricing?.promoLabel
+      ? o.pricing.promoLabel.replace(/[|\s]+$/, "").trim() || null
+      : null,
     unitPrice: o.pricing?.unitPrice ?? null,
     pricePerPiece: pieces ? price / pieces : null,
     pkg,
@@ -237,12 +239,31 @@ const addLocation = (params: URLSearchParams, opts?: LocationOpts) => {
   if (opts?.radiusKm) params.set("radiusKm", String(opts.radiusKm));
 };
 
+// Bezorg-only webshops (geen fysieke winkel in de buurt). Butlon toont
+// bovendien permanente "-XX%"-kortingen die echte supermarkt-acties verdringen.
+export const DELIVERY_ONLY_STORES = ["butlon", "picnic", "makro", "groentebroer"];
+
+const recomputeLowest = (g: ProductGroup, offers: Offer[]): ProductGroup => {
+  const min = offers.reduce((m, o) => (o.price < m ? o.price : m), Infinity);
+  offers.forEach((o) => (o.isCheapest = o.price === min));
+  const unit = offers
+    .map((o) => o.unitPrice)
+    .filter((v): v is number => v != null);
+  return {
+    ...g,
+    offers,
+    lowestPrice: offers.length ? min : null,
+    lowestUnitPrice: unit.length ? Math.min(...unit) : null,
+  };
+};
+
 export async function searchProducts(
   query: string,
   opts?: LocationOpts & {
     signal?: AbortSignal;
     limit?: number;
     stores?: string[];
+    excludeStores?: string[];
   },
 ): Promise<ProductGroup[]> {
   const params = new URLSearchParams({ q: query });
@@ -256,9 +277,15 @@ export async function searchProducts(
   });
   if (!r.ok) throw new Error(`WinkelMaatje search failed: ${r.status}`);
   const json: RawSearchResponse = await r.json();
-  const groups = (json.results || [])
+  let groups = (json.results || [])
     .map(normalizeGroup)
     .filter((g) => g.offers.length > 0);
+  if (opts?.excludeStores?.length) {
+    const ex = new Set(opts.excludeStores);
+    groups = groups
+      .map((g) => recomputeLowest(g, g.offers.filter((o) => !ex.has(o.storeId))))
+      .filter((g) => g.offers.length > 0);
+  }
   return dedupeGroups(groups);
 }
 
