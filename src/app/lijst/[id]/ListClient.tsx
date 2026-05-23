@@ -36,6 +36,8 @@ type SearchOffer = {
   storeId: string;
   storeName: string;
   price: number;
+  regularPrice: number | null;
+  promoLabel: string | null;
   unitPrice: number | null;
   pricePerPiece: number | null;
   pkg: Pkg;
@@ -585,6 +587,26 @@ export default function ListClient({
                           )}
                         </p>
                       )}
+                      {group.offers.some((o) => o.promoLabel) && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {Array.from(
+                            new Set(
+                              group.offers
+                                .filter((o) => o.promoLabel)
+                                .map((o) => `${o.storeName}: ${o.promoLabel}`),
+                            ),
+                          )
+                            .slice(0, 3)
+                            .map((txt) => (
+                              <span
+                                key={txt}
+                                className="text-[10px] font-semibold text-red-600 bg-red-50 rounded px-1.5 py-0.5"
+                              >
+                                {txt}
+                              </span>
+                            ))}
+                        </div>
+                      )}
                     </div>
                     <span className="text-slate-400 text-lg shrink-0 pl-1">
                       {expanded ? "▾" : "›"}
@@ -605,16 +627,26 @@ export default function ListClient({
                             }`}
                           >
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium">
-                                {offer.storeName}
+                              <p className="text-sm font-medium flex items-center flex-wrap gap-x-2 gap-y-1">
+                                <span>{offer.storeName}</span>
+                                {offer.promoLabel && (
+                                  <span className="text-[10px] font-bold text-white bg-red-500 rounded px-1.5 py-0.5 uppercase">
+                                    {offer.promoLabel}
+                                  </span>
+                                )}
                                 {cheapestUnit && (
-                                  <span className="ml-2 text-[10px] font-bold text-green-700 uppercase">
+                                  <span className="text-[10px] font-bold text-green-700 uppercase">
                                     voordeligst p/st
                                   </span>
                                 )}
                               </p>
                               <p className="text-xs text-slate-500">
                                 {formatPrice(offer.price)}
+                                {offer.regularPrice && (
+                                  <span className="line-through text-slate-400 ml-1">
+                                    {formatPrice(offer.regularPrice)}
+                                  </span>
+                                )}
                                 {ppLabel && <> · {ppLabel}</>}
                               </p>
                             </div>

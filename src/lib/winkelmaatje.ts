@@ -20,7 +20,9 @@ export type Pkg = {
 export type Offer = {
   storeId: string;
   storeName: string;
-  price: number;
+  price: number; // echte stukprijs die je nu betaalt (incl. directe afprijzing)
+  regularPrice: number | null; // normale schapprijs, indien er een actie loopt
+  promoLabel: string | null; // bv. "2+3 GRATIS", "-31%"
   unitPrice: number | null; // prijs per genormaliseerde eenheid (per kg / per l)
   pricePerPiece: number | null; // prijs per stuk, indien bekend
   pkg: Pkg;
@@ -51,6 +53,7 @@ type RawPricing = {
   price?: number | null;
   effectivePrice?: number | null;
   promoPrice?: number | null;
+  promoLabel?: string | null;
   unitPrice?: number | null;
   lowestPrice?: number | null;
   lowestUnitPrice?: number | null;
@@ -90,9 +93,12 @@ const normalizePkg = (p?: RawPackage | null): Pkg => ({
   normalizedUnit: p?.normalizedUnit ?? null,
 });
 
-const offerPrice = (p?: RawPricing | null): number | null => {
+// De échte prijs voor één stuk: bij een directe afprijzing is dat promoPrice,
+// anders de gewone schapprijs. We gebruiken expres NIET effectivePrice, want
+// die rekent bij multibuy-acties (bv. "2+3 gratis") al met de hele bundel.
+const singleUnitPrice = (p?: RawPricing | null): number | null => {
   if (!p) return null;
-  const candidates = [p.effectivePrice, p.price, p.promoPrice];
+  const candidates = [p.promoPrice, p.price, p.effectivePrice];
   for (const c of candidates) {
     if (typeof c === "number" && c > 0) return c;
   }
@@ -104,14 +110,20 @@ const normalizeOffer = (
   groupImage: string | null,
   groupPkg: Pkg,
 ): Offer | null => {
-  const price = offerPrice(o.pricing);
+  const price = singleUnitPrice(o.pricing);
   if (!o.storeId || price === null) return null;
   const pkg = o.package ? normalizePkg(o.package) : groupPkg;
   const pieces = pkg.pieceCount && pkg.pieceCount > 0 ? pkg.pieceCount : null;
+  const regular =
+    typeof o.pricing?.price === "number" && o.pricing.price > price
+      ? o.pricing.price
+      : null;
   return {
     storeId: o.storeId,
     storeName: o.storeName || o.storeId,
     price,
+    regularPrice: regular,
+    promoLabel: o.pricing?.promoLabel ?? null,
     unitPrice: o.pricing?.unitPrice ?? null,
     pricePerPiece: pieces ? price / pieces : null,
     pkg,
@@ -155,8 +167,18 @@ const normalizeTitle = (s: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
-const dedupeKey = (g: ProductGroup): string =>
-  `${normalizeTitle(`${g.brand ?? ""} ${g.name}`)}|p:${g.pkg.pieceCount ?? ""}`;
+// Sleutel bevat naast de genormaliseerde titel óók het aantal stuks én de
+// verpakkingsgrootte. Zo voegen we alleen écht identieke artikelen samen
+// (bv. AH's dubbele pagina) en niet twee maten van hetzelfde merk (780 vs 825 ml).
+const dedupeKey = (g: ProductGroup): string => {
+  const size =
+    g.pkg.displayQuantity != null
+      ? `${g.pkg.displayQuantity}${g.pkg.displayUnit ?? ""}`
+      : "";
+  return `${normalizeTitle(`${g.brand ?? ""} ${g.name}`)}|p:${
+    g.pkg.pieceCount ?? ""
+  }|q:${size}`;
+};
 
 const cheapestOfferPrice = (g: ProductGroup): number =>
   g.offers.reduce((m, o) => (o.price < m ? o.price : m), Infinity);
