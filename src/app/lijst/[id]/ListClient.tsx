@@ -124,43 +124,21 @@ export default function ListClient({
   const abortRef = useRef<AbortController | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // Collect available store names from search results for filter buttons
-  const availableStores = useMemo(() => {
-    const storeMap = new Map<string, string>();
-    for (const g of searchResults) {
-      for (const o of g.offers) {
-        if (!storeMap.has(o.storeId)) storeMap.set(o.storeId, o.storeName);
-      }
-    }
-    return Array.from(storeMap.entries()).map(([id, name]) => ({ id, name }));
-  }, [searchResults]);
+  // Winkelfilter-knoppen. Deze vullen we alleen vanuit een brede (ongefilterde)
+  // zoekopdracht, zodat de knoppen niet verdwijnen zodra je op één winkel filtert.
+  const [availableStores, setAvailableStores] = useState<
+    { id: string; name: string }[]
+  >([]);
 
-  // Filter and sort results based on preferred store
+  // Sorteer de (al door de API op winkel gefilterde) resultaten.
   const filteredResults = useMemo(() => {
-    let results = [...searchResults];
-    if (preferredStore) {
-      // Only show products available at the preferred store
-      results = results
-        .map((g) => ({
-          ...g,
-          offers: g.offers.filter((o) => o.storeId === preferredStore),
-          lowestPrice: g.offers
-            .filter((o) => o.storeId === preferredStore)
-            .reduce((min, o) => (o.price < min ? o.price : min), Infinity),
-        }))
-        .filter((g) => g.offers.length > 0)
-        .map((g) => ({
-          ...g,
-          lowestPrice: g.lowestPrice === Infinity ? null : g.lowestPrice,
-        }));
-    }
-    return results.sort((a, b) => {
+    return [...searchResults].sort((a, b) => {
       if (sortMode === "unit") {
         return unitSortValue(a) - unitSortValue(b);
       }
       return (a.lowestPrice ?? Infinity) - (b.lowestPrice ?? Infinity);
     });
-  }, [searchResults, preferredStore, sortMode]);
+  }, [searchResults, sortMode]);
 
   useEffect(() => {
     const channel = supabase
@@ -214,43 +192,76 @@ export default function ListClient({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const searchProducts = useCallback(async (query: string) => {
-    if (query.length < 2) {
-      setSearchResults([]);
-      setShowResults(false);
-      return;
-    }
-    // Cancel previous request
-    if (abortRef.current) abortRef.current.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setSearching(true);
-    try {
-      const r = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
-        signal: controller.signal,
-      });
-      if (!r.ok) throw new Error("search failed");
-      const json = await r.json();
-      setSearchResults(json.groups || []);
-      setShowResults(true);
-    } catch (e) {
-      if ((e as Error).name !== "AbortError") {
+  const searchProducts = useCallback(
+    async (query: string, store: string | null) => {
+      if (query.length < 2) {
         setSearchResults([]);
+        setShowResults(false);
+        return;
       }
-    } finally {
-      setSearching(false);
-    }
-  }, []);
+      // Cancel previous request
+      if (abortRef.current) abortRef.current.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setSearching(true);
+      try {
+        const params = new URLSearchParams({ q: query });
+        if (store) params.set("store", store);
+        const r = await fetch(`/api/search?${params}`, {
+          signal: controller.signal,
+        });
+        if (!r.ok) throw new Error("search failed");
+        const json = await r.json();
+        const groups: SearchGroup[] = json.groups || [];
+        setSearchResults(groups);
+        // Vul de winkelknoppen alleen bij een brede zoekopdracht.
+        if (!store) {
+          const m = new Map<string, string>();
+          for (const g of groups) {
+            for (const o of g.offers) {
+              if (!m.has(o.storeId)) m.set(o.storeId, o.storeName);
+            }
+          }
+          setAvailableStores(
+            Array.from(m.entries()).map(([id, name]) => ({ id, name })),
+          );
+        }
+        setShowResults(true);
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") {
+          setSearchResults([]);
+        }
+      } finally {
+        setSearching(false);
+      }
+    },
+    [],
+  );
 
   const handleNameChange = (val: string) => {
     setName(val);
+    // Een nieuwe zoekterm reset de winkelfilter naar "alle winkels".
+    setPreferredStore(null);
     // Debounce search
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (val.trim().length >= 2) {
-      searchTimeout.current = setTimeout(() => searchProducts(val.trim()), 400);
+      searchTimeout.current = setTimeout(
+        () => searchProducts(val.trim(), null),
+        400,
+      );
     } else {
       setSearchResults([]);
       setShowResults(false);
+    }
+  };
+
+  // Bij het kiezen van een winkelfilter halen we gericht het assortiment van
+  // die winkel op (de brede zoekopdracht toont maar een deel per winkel).
+  const selectStore = (storeId: string | null) => {
+    setPreferredStore(storeId);
+    setExpandedId(null);
+    if (name.trim().length >= 2) {
+      searchProducts(name.trim(), storeId);
     }
   };
 
@@ -495,7 +506,7 @@ export default function ListClient({
               <div className="flex gap-2 overflow-x-auto -mx-1 px-1">
                 <button
                   type="button"
-                  onClick={() => setPreferredStore(null)}
+                  onClick={() => selectStore(null)}
                   className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-colors ${
                     preferredStore === null
                       ? "bg-slate-800 border-slate-800 text-white"
@@ -509,7 +520,7 @@ export default function ListClient({
                     type="button"
                     key={s.id}
                     onClick={() =>
-                      setPreferredStore(s.id === preferredStore ? null : s.id)
+                      selectStore(s.id === preferredStore ? null : s.id)
                     }
                     className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold border-2 transition-colors ${
                       preferredStore === s.id

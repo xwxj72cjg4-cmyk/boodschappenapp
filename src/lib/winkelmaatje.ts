@@ -239,10 +239,16 @@ const addLocation = (params: URLSearchParams, opts?: LocationOpts) => {
 
 export async function searchProducts(
   query: string,
-  opts?: LocationOpts & { signal?: AbortSignal },
+  opts?: LocationOpts & {
+    signal?: AbortSignal;
+    limit?: number;
+    stores?: string[];
+  },
 ): Promise<ProductGroup[]> {
   const params = new URLSearchParams({ q: query });
   addLocation(params, opts);
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.stores?.length) params.set("stores", opts.stores.join(","));
   const r = await fetch(`${API}/search?${params}`, {
     signal: opts?.signal,
     headers: { accept: "application/json" },
