@@ -280,6 +280,8 @@ export default function ListClient({
       setName("");
       setQty(1);
       setSearchResults([]);
+    } else {
+      alert(`Toevoegen mislukt: ${error.message}`);
     }
     setBusy(false);
   };
@@ -306,6 +308,8 @@ export default function ListClient({
       setName("");
       setQty(1);
       setSearchResults([]);
+    } else {
+      alert(`Toevoegen mislukt: ${error.message}`);
     }
     setBusy(false);
   };
@@ -329,6 +333,8 @@ export default function ListClient({
       setName("");
       setQty(1);
       setSearchResults([]);
+    } else {
+      alert(`Toevoegen mislukt: ${error.message}`);
     }
     setBusy(false);
   };

@@ -28,9 +28,15 @@ create table if not exists list_items (
   name text not null,
   qty int not null default 1,
   checked boolean not null default false,
+  image_url text,
+  price numeric,
   added_by uuid references auth.users(id) on delete set null,
   created_at timestamptz default now()
 );
+
+-- Idempotente upgrade voor bestaande databases: voeg de product-velden toe.
+alter table list_items add column if not exists image_url text;
+alter table list_items add column if not exists price numeric;
 
 create index if not exists list_items_household_idx on list_items(household_id, checked, created_at);
 
