@@ -119,7 +119,7 @@ export default function ListClient({
   const [showResults, setShowResults] = useState(false);
   const [preferredStore, setPreferredStore] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("unit");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<SearchGroup | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -259,7 +259,7 @@ export default function ListClient({
   // die winkel op (de brede zoekopdracht toont maar een deel per winkel).
   const selectStore = (storeId: string | null) => {
     setPreferredStore(storeId);
-    setExpandedId(null);
+    setSelectedGroup(null);
     if (name.trim().length >= 2) {
       searchProducts(name.trim(), storeId);
     }
@@ -295,7 +295,7 @@ export default function ListClient({
       : null;
     setBusy(true);
     setShowResults(false);
-    setExpandedId(null);
+    setSelectedGroup(null);
     const { error } = await supabase.from("list_items").insert({
       household_id: household.id,
       name: productName,
@@ -320,7 +320,7 @@ export default function ListClient({
     const productName = `${baseName} (${offer.storeName})`;
     setBusy(true);
     setShowResults(false);
-    setExpandedId(null);
+    setSelectedGroup(null);
     const { error } = await supabase.from("list_items").insert({
       household_id: household.id,
       name: productName,
@@ -565,7 +565,6 @@ export default function ListClient({
               </div>
             )}
             {filteredResults.map((group) => {
-              const expanded = expandedId === group.id;
               const sortedOffers = [...group.offers].sort((a, b) =>
                 sortMode === "unit"
                   ? (a.pricePerPiece ?? a.unitPrice ?? a.price) -
@@ -575,134 +574,68 @@ export default function ListClient({
               const headline = sortedOffers[0];
               const pkgText = pkgLabel(group.pkg);
               return (
-                <div
+                <button
                   key={group.id}
-                  className="border-b border-slate-100 last:border-b-0"
+                  type="button"
+                  onClick={() => setSelectedGroup(group)}
+                  className="w-full text-left p-3 flex items-start gap-3 hover:bg-slate-50 active:bg-slate-100 border-b border-slate-100 last:border-b-0"
                 >
-                  {/* Samenvattingsrij — tik om uit te klappen */}
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId(expanded ? null : group.id)}
-                    className="w-full text-left p-3 flex items-start gap-3 hover:bg-slate-50 active:bg-slate-100"
-                  >
-                    <div className="w-14 h-14 shrink-0 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center">
-                      {group.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={group.imageUrl}
-                          alt=""
-                          className="w-full h-full object-contain"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <span className="text-slate-300 text-2xl">?</span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm leading-tight">
-                        {group.brand ? `${group.brand} ` : ""}
-                        {group.name}
+                  <div className="w-14 h-14 shrink-0 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center">
+                    {group.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={group.imageUrl}
+                        alt=""
+                        className="w-full h-full object-contain"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="text-slate-300 text-2xl">?</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm leading-tight">
+                      {group.brand ? `${group.brand} ` : ""}
+                      {group.name}
+                    </p>
+                    {pkgText && (
+                      <p className="text-xs text-slate-400">{pkgText}</p>
+                    )}
+                    {headline && (
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        v.a. {formatPrice(headline.price)} bij{" "}
+                        {headline.storeName}
+                        {unitLabel(headline) && (
+                          <span className="text-green-700 font-semibold">
+                            {" "}
+                            · {unitLabel(headline)}
+                          </span>
+                        )}
                       </p>
-                      {pkgText && (
-                        <p className="text-xs text-slate-400">{pkgText}</p>
-                      )}
-                      {headline && (
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          v.a. {formatPrice(headline.price)} bij{" "}
-                          {headline.storeName}
-                          {unitLabel(headline) && (
-                            <span className="text-green-700 font-semibold">
-                              {" "}
-                              · {unitLabel(headline)}
-                            </span>
-                          )}
-                        </p>
-                      )}
-                      {group.offers.some((o) => o.promoLabel) && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {Array.from(
-                            new Set(
-                              group.offers
-                                .filter((o) => o.promoLabel)
-                                .map((o) => `${o.storeName}: ${o.promoLabel}`),
-                            ),
-                          )
-                            .slice(0, 3)
-                            .map((txt) => (
-                              <span
-                                key={txt}
-                                className="text-[10px] font-semibold text-red-600 bg-red-50 rounded px-1.5 py-0.5"
-                              >
-                                {txt}
-                              </span>
-                            ))}
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-slate-400 text-lg shrink-0 pl-1">
-                      {expanded ? "▾" : "›"}
-                    </span>
-                  </button>
-
-                  {/* Uitgeklapt: alle winkels vergeleken */}
-                  {expanded && (
-                    <div className="px-3 pb-3 space-y-1">
-                      {sortedOffers.map((offer, i) => {
-                        const ppLabel = unitLabel(offer);
-                        const cheapestUnit = i === 0 && sortMode === "unit";
-                        return (
-                          <div
-                            key={`${offer.storeId}-${i}`}
-                            className={`flex items-center gap-2 rounded-xl px-3 py-2 ${
-                              cheapestUnit ? "bg-green-50" : "bg-slate-50"
-                            }`}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium flex items-center flex-wrap gap-x-2 gap-y-1">
-                                <span>{offer.storeName}</span>
-                                {offer.promoLabel && (
-                                  <span className="text-[10px] font-bold text-white bg-red-500 rounded px-1.5 py-0.5 uppercase">
-                                    {offer.promoLabel}
-                                  </span>
-                                )}
-                                {cheapestUnit && (
-                                  <span className="text-[10px] font-bold text-green-700 uppercase">
-                                    voordeligst p/st
-                                  </span>
-                                )}
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                {formatPrice(offer.price)}
-                                {offer.regularPrice && (
-                                  <span className="line-through text-slate-400 ml-1">
-                                    {formatPrice(offer.regularPrice)}
-                                  </span>
-                                )}
-                                {ppLabel && <> · {ppLabel}</>}
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => addFromOffer(group, offer)}
-                              disabled={busy}
-                              className="shrink-0 rounded-lg bg-brand-600 text-white px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                    )}
+                    {group.offers.some((o) => o.promoLabel) && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {Array.from(
+                          new Set(
+                            group.offers
+                              .filter((o) => o.promoLabel)
+                              .map((o) => `${o.storeName}: ${o.promoLabel}`),
+                          ),
+                        )
+                          .slice(0, 3)
+                          .map((txt) => (
+                            <span
+                              key={txt}
+                              className="text-[10px] font-semibold text-red-600 bg-red-50 rounded px-1.5 py-0.5"
                             >
-                              + Lijst
-                            </button>
-                          </div>
-                        );
-                      })}
-                      <button
-                        type="button"
-                        onClick={() => addFromSearch(group)}
-                        disabled={busy}
-                        className="w-full text-center text-xs text-slate-500 underline pt-1"
-                      >
-                        Voeg goedkoopste automatisch toe
-                      </button>
-                    </div>
-                  )}
-                </div>
+                              {txt}
+                            </span>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-slate-400 text-lg shrink-0 pl-1">›</span>
+                </button>
               );
             })}
             {!searching && filteredResults.length > 0 && (
@@ -813,6 +746,159 @@ export default function ListClient({
       <p className="text-xs text-slate-400 text-center">
         Tip: veeg een item naar links om te verwijderen.
       </p>
+
+      {/* Product-detailweergave: groot scherm met foto, alle winkels en acties */}
+      {selectedGroup &&
+        (() => {
+          const g = selectedGroup;
+          const sortedOffers = [...g.offers].sort((a, b) =>
+            sortMode === "unit"
+              ? (a.pricePerPiece ?? a.unitPrice ?? a.price) -
+                (b.pricePerPiece ?? b.unitPrice ?? b.price)
+              : a.price - b.price,
+          );
+          const pkgText = pkgLabel(g.pkg);
+          return (
+            <div
+              className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+              onClick={() => setSelectedGroup(null)}
+            >
+              <div
+                className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[90vh] flex flex-col overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between p-3 border-b border-slate-100">
+                  <h2 className="font-semibold truncate">Product</h2>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGroup(null)}
+                    className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 text-xl font-bold shrink-0"
+                    aria-label="Sluiten"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1">
+                  <div className="bg-slate-50 flex items-center justify-center p-6">
+                    {g.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={g.imageUrl}
+                        alt=""
+                        className="w-48 h-48 object-contain"
+                      />
+                    ) : (
+                      <span className="text-slate-300 text-6xl">?</span>
+                    )}
+                  </div>
+
+                  <div className="p-4 space-y-1 border-b border-slate-100">
+                    {g.brand && (
+                      <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">
+                        {g.brand}
+                      </p>
+                    )}
+                    <h3 className="text-lg font-bold leading-tight">{g.name}</h3>
+                    {pkgText && (
+                      <p className="text-sm text-slate-500">{pkgText}</p>
+                    )}
+                    <div className="flex items-center gap-3 pt-2">
+                      <label className="text-sm text-slate-600">Aantal</label>
+                      <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setQty(Math.max(1, qty - 1))}
+                          className="px-3 py-1 text-lg"
+                        >
+                          −
+                        </button>
+                        <span className="px-3 font-semibold w-8 text-center">
+                          {qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setQty(qty + 1)}
+                          className="px-3 py-1 text-lg"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 space-y-2">
+                    <p className="text-sm font-semibold text-slate-700 px-1">
+                      Verkrijgbaar bij {sortedOffers.length}{" "}
+                      {sortedOffers.length === 1 ? "winkel" : "winkels"}
+                    </p>
+                    {sortedOffers.map((offer, i) => {
+                      const ppLabel = unitLabel(offer);
+                      const cheapestUnit = i === 0 && sortMode === "unit";
+                      return (
+                        <div
+                          key={`${offer.storeId}-${i}`}
+                          className={`flex items-center gap-2 rounded-xl px-3 py-3 ${
+                            cheapestUnit ? "bg-green-50" : "bg-slate-50"
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold flex items-center flex-wrap gap-x-2 gap-y-1">
+                              <span>{offer.storeName}</span>
+                              {offer.promoLabel && (
+                                <span className="text-[10px] font-bold text-white bg-red-500 rounded px-1.5 py-0.5 uppercase">
+                                  {offer.promoLabel}
+                                </span>
+                              )}
+                              {cheapestUnit && (
+                                <span className="text-[10px] font-bold text-green-700 uppercase">
+                                  voordeligst p/st
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-sm text-slate-700 mt-0.5">
+                              <span className="font-bold">
+                                {formatPrice(offer.price)}
+                              </span>
+                              {offer.regularPrice && (
+                                <span className="line-through text-slate-400 ml-2 text-xs">
+                                  {formatPrice(offer.regularPrice)}
+                                </span>
+                              )}
+                            </p>
+                            {ppLabel && (
+                              <p className="text-xs text-slate-500">{ppLabel}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => addFromOffer(g, offer)}
+                            disabled={busy}
+                            className="shrink-0 rounded-xl bg-brand-600 text-white px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                          >
+                            + Lijst
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="p-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => addFromSearch(g)}
+                    disabled={busy}
+                    className="w-full rounded-xl bg-brand-700 text-white py-3 font-semibold disabled:opacity-60"
+                  >
+                    Voeg goedkoopste toe ({formatPrice(sortedOffers[0]?.price ?? 0)}{" "}
+                    bij {sortedOffers[0]?.storeName})
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
     </main>
   );
 }
