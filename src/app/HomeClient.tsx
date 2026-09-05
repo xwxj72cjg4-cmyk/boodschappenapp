@@ -10,7 +10,7 @@ type Household = { id: string; name: string; invite_code: string };
 export default function HomeClient({
   userEmail,
   userId,
-  households,
+  households: initialHouseholds,
 }: {
   userEmail: string;
   userId: string;
@@ -18,10 +18,14 @@ export default function HomeClient({
 }) {
   const supabase = createClient();
   const router = useRouter();
+  const [households, setHouseholds] = useState(initialHouseholds);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [joinCode, setJoinCode] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [copied, setCopied] = useState<string | null>(null);
 
   const createHousehold = async () => {
     if (!newName.trim()) return;
@@ -48,10 +52,6 @@ export default function HomeClient({
     setBusy(true);
     setError(null);
     try {
-      // Look up household by invite_code. RLS only allows reading households
-      // you're a member of, so we use an RPC-style filter: insert membership
-      // first by code-based lookup via a public function would be cleaner,
-      // but for simplicity we let the user self-join by code if it exists.
       const { error: e1 } = await supabase.rpc("join_household_by_code", { code });
       if (e1) throw e1;
       router.refresh();
@@ -60,6 +60,47 @@ export default function HomeClient({
       setError(e instanceof Error ? e.message : "Joinen mislukt");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const renameHousehold = async (id: string) => {
+    if (!editName.trim()) return;
+    setBusy(true);
+    setError(null);
+    const { error: e1 } = await supabase
+      .from("households")
+      .update({ name: editName.trim() })
+      .eq("id", id);
+    if (!e1) {
+      setHouseholds((prev) =>
+        prev.map((h) => (h.id === id ? { ...h, name: editName.trim() } : h)),
+      );
+      setEditingId(null);
+      setEditName("");
+    } else {
+      setError("Naam wijzigen mislukt");
+    }
+    setBusy(false);
+  };
+
+  const shareInvite = async (h: Household) => {
+    const url = `${window.location.origin}/login?join=${h.invite_code}`;
+    const text = `Join mijn boodschappenlijst "${h.name}"! Open deze link: ${url}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Join ${h.name}`, text, url });
+        return;
+      } catch {
+        // user cancelled or share failed, fall through to clipboard
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(h.id);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      setError("Kopiëren mislukt");
     }
   };
 
@@ -90,16 +131,62 @@ export default function HomeClient({
         ) : (
           <ul className="space-y-2">
             {households.map((h) => (
-              <li key={h.id}>
-                <Link
-                  href={`/lijst/${h.id}`}
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 active:bg-slate-100"
-                >
-                  <span className="font-medium">{h.name}</span>
-                  <span className="text-xs text-slate-500">
-                    code: {h.invite_code}
-                  </span>
-                </Link>
+              <li key={h.id} className="rounded-xl bg-slate-50 overflow-hidden">
+                {editingId === h.id ? (
+                  <div className="p-3 flex gap-2">
+                    <input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") renameHousehold(h.id);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => renameHousehold(h.id)}
+                      disabled={busy}
+                      className="rounded-lg bg-brand-600 text-white px-3 py-2 text-sm font-semibold disabled:opacity-60"
+                    >
+                      Opslaan
+                    </button>
+                    <button
+                      onClick={() => setEditingId(null)}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-500"
+                    >
+                      Annuleer
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <Link
+                      href={`/lijst/${h.id}`}
+                      className="flex items-center justify-between p-3 active:bg-slate-100"
+                    >
+                      <span className="font-medium">{h.name}</span>
+                      <span className="text-xs text-slate-400">&rarr;</span>
+                    </Link>
+                    <div className="flex items-center gap-1 px-3 pb-3">
+                      <button
+                        onClick={() => {
+                          setEditingId(h.id);
+                          setEditName(h.name);
+                        }}
+                        className="text-xs text-slate-500 underline"
+                      >
+                        Naam wijzigen
+                      </button>
+                      <span className="text-slate-300">|</span>
+                      <button
+                        onClick={() => shareInvite(h)}
+                        className="text-xs text-brand-600 font-semibold underline"
+                      >
+                        {copied === h.id ? "Link gekopieerd!" : "Uitnodigingslink delen"}
+                      </button>
+                    </div>
+                  </>
+                )}
               </li>
             ))}
           </ul>
