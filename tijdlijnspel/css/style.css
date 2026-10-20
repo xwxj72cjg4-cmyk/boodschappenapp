@@ -99,6 +99,9 @@ button:focus-visible, .input:focus-visible { box-shadow: var(--focus); }
   font-size: 1.05rem;
   transition: transform 0.12s, background 0.12s;
 }
+a.btn { color: var(--text); text-decoration: none; display: inline-block; text-align: center; }
+a:focus { outline: none; }
+a:focus-visible { box-shadow: var(--focus); }
 .btn:active { transform: scale(0.97); }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .btn.big { padding: 0.95rem 2rem; font-size: 1.2rem; }
@@ -224,6 +227,17 @@ textarea.input { resize: vertical; line-height: 1.5; }
 }
 
 /* ---------- Speelveld ---------- */
+
+.qr {
+  width: 10rem;
+  height: 10rem;
+  margin-top: 0.6rem;
+  padding: 0.4rem;
+  background: #fff;
+  border-radius: 0.8rem;
+}
+.qr svg { width: 100%; height: 100%; display: block; }
+.qr-hint { max-width: 14rem; text-align: center; }
 
 .play-top, .reveal-top {
   display: flex;

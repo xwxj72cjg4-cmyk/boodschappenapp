@@ -32,7 +32,35 @@ per kaart, `[jaar, "titel", "extra info"]`.
 6. **Munten 🪙**: je begint met 2. Raad je bij muziek titel én artiest goed,
    dan krijg je er een bij. Met een munt mag je een kaart overslaan.
 
-## Muziekfragmenten
+## Muziek afspelen
+
+Bij *Nieuw spel* kies je hoe de muziekkaarten klinken:
+
+- **🔊 Fragment (30 sec.):** de app speelt zelf een fragment af (zie hieronder).
+- **📱 Spotify-QR:** op de mysteriekaart staat een QR-code, net als bij
+  Hitster. Scan hem met de camera van een telefoon met Spotify en het nummer
+  opent in de Spotify-app. Op hetzelfde toestel kan het ook, met *Open op dit
+  toestel*. Na het onthullen kun je met *Hele nummer op Spotify* verder
+  luisteren.
+- **📖 Voorlezen:** titel en artiest staan open op de kaart.
+
+Let op bij Spotify: de app laat de titel zien. Laat dus iemand anders (de
+quizmaster) scannen, of houd het scherm van de speler weg.
+
+### Spotify-links
+
+Standaard verwijst de QR-code naar Spotify-zoekresultaten voor *artiest +
+titel*. Het juiste nummer staat dan bovenaan, maar je moet het nog aantikken.
+Wil je dat de QR direct het nummer opent, geef de kaart dan een link:
+
+- In `js/decks.js` zet je een vierde waarde achter de kaart:
+  `[1975, "Bohemian Rhapsody", "Queen", "https://open.spotify.com/track/…"]`.
+  Een losse track-ID of `spotify:track:…` mag ook.
+- Bij *Eigen kaarten* plak je de link achteraan de regel:
+  `1975; Bohemian Rhapsody; Queen; https://open.spotify.com/track/…`
+  (in Spotify: ··· → Delen → Kopieer link naar nummer).
+
+### Muziekfragmenten
 
 De fragmenten komen live via de gratis
 [iTunes Search API](https://performance-partners.apple.com/search-api) van
@@ -117,7 +145,8 @@ tijdlijnspel/
 ├── index.html            app-shell
 ├── css/style.css         opmaak (schaalt van telefoon tot 4K-tv)
 ├── js/decks.js           alle kaartensets
-├── js/app.js             spel-logica, schermen, afstandsbediening, fragmenten
+├── js/app.js             spel-logica, schermen, afstandsbediening, fragmenten, QR
+├── js/vendor/qrcode.js   QR-generator (qrcode-generator 1.4.4, MIT, Kazuhiko Arase)
 ├── sw.js                 offline-cache (PWA)
 ├── manifest.webmanifest  PWA-gegevens voor iPhone/iPad
 ├── appinfo.json          gegevens voor de LG webOS-app
