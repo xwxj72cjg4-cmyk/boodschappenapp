@@ -37,9 +37,16 @@
     };
   }
 
+  // Genre-sets uit js/muziek-db.js (gemaakt uit Wikidata door tools/bouw-muziek.mjs).
+  function genreDecks() {
+    return (window.MUSIC_DB || [])
+      .filter((d) => d.cards.length)
+      .map((d) => Object.assign({ description: "Nummers via Wikipedia" }, d));
+  }
+
   function allDecks() {
     const own = customDeck();
-    return own ? window.DECKS.concat(own) : window.DECKS;
+    return window.DECKS.concat(genreDecks(), own ? [own] : []);
   }
 
   // ---------- Hulpjes ----------
@@ -87,8 +94,11 @@
     const term = encodeURIComponent((card.sub + " " + card.title).replace(/ft\.|feat\.|&/gi, " "));
     const controller = "AbortController" in window ? new AbortController() : null;
     const timer = setTimeout(() => controller && controller.abort(), 7000);
+    // Kaarten uit de genre-database hebben al een vaste Apple-ID; de rest zoeken we op.
     const promise = fetch(
-      "https://itunes.apple.com/search?media=music&entity=song&limit=10&country=NL&term=" + term,
+      card.itunes
+        ? "https://itunes.apple.com/lookup?country=NL&id=" + card.itunes
+        : "https://itunes.apple.com/search?media=music&entity=song&limit=10&country=NL&term=" + term,
       controller ? { signal: controller.signal } : undefined
     )
       .then((r) => (r.ok ? r.json() : { results: [] }))
@@ -97,6 +107,7 @@
         const artist = normalize(card.sub.split(/ ft\.| feat\.| &/)[0]);
         const title = normalize(card.title).slice(0, 8);
         const best =
+          (card.itunes && results[0]) ||
           results.find((r) => normalize(r.artistName).includes(artist) && normalize(r.trackName).includes(title)) ||
           results.find((r) => normalize(r.artistName).includes(artist)) ||
           null;
@@ -163,10 +174,15 @@
   function newGame() {
     const decks = allDecks().filter((d) => settings.decks.includes(d.id));
     const cards = [];
+    const seen = new Set();
     decks.forEach((d) =>
-      d.cards.forEach(([year, title, sub, spotify]) =>
-        cards.push({ year, title, sub: sub || "", spotify: spotify || "", deck: d.id, music: !!d.music })
-      )
+      d.cards.forEach(([year, title, sub, spotify, itunes]) => {
+        // Een nummer kan in meerdere genres staan; dan maar één keer in de stapel.
+        const key = normalize(title) + "|" + normalize(sub || "");
+        if (seen.has(key)) return;
+        seen.add(key);
+        cards.push({ year, title, sub: sub || "", spotify: spotify || "", itunes: itunes || 0, deck: d.id, music: !!d.music });
+      })
     );
     const pile = shuffle(cards);
     const players = settings.players.map((name) => ({ name, timeline: [pile.pop()], coins: 2 }));
@@ -275,6 +291,26 @@
     return html + "</div>";
   }
 
+  function deckGroup(heading, decks, row, autofocus) {
+    if (!decks.length) return "";
+    return (
+      "<h3>" + heading + "</h3>" +
+      '<div class="decks" data-row="' + row + '">' +
+      decks
+        .map(
+          (d, i) =>
+            '<button class="deck' + (settings.decks.includes(d.id) ? " on" : "") + '" data-deck="' + d.id + '"' +
+            (autofocus && i === 0 ? " autofocus" : "") + ' aria-pressed="' + settings.decks.includes(d.id) + '">' +
+            '<span class="deck-emoji">' + d.emoji + "</span>" +
+            '<span class="deck-name">' + esc(d.name) + "</span>" +
+            '<span class="deck-desc">' + esc(d.description) + " · " + d.cards.length + " kaarten</span>" +
+            "</button>"
+        )
+        .join("") +
+      "</div>"
+    );
+  }
+
   const views = {
     home() {
       return (
@@ -331,21 +367,8 @@
         (settings.players.length < MAX_PLAYERS
           ? '<div class="row" data-row="add"><button class="btn" data-add>+ Speler toevoegen</button></div>'
           : "") +
-        "<h3>Scenario's</h3>" +
-        '<div class="decks" data-row="decks">' +
-        decks
-          .map(
-            (d) =>
-              '<button class="deck' + (settings.decks.includes(d.id) ? " on" : "") + '" data-deck="' + d.id + '"' +
-              (d === decks[0] ? " autofocus" : "") + ' aria-pressed="' +
-              settings.decks.includes(d.id) + '">' +
-              '<span class="deck-emoji">' + d.emoji + "</span>" +
-              '<span class="deck-name">' + esc(d.name) + "</span>" +
-              '<span class="deck-desc">' + esc(d.description) + " · " + d.cards.length + " kaarten</span>" +
-              "</button>"
-          )
-          .join("") +
-        "</div>" +
+        deckGroup("Scenario's", decks.filter((d) => !d.id.startsWith("genre-")), "decks", true) +
+        deckGroup("Muziek per genre", decks.filter((d) => d.id.startsWith("genre-")), "genres") +
         "<h3>Opties</h3>" +
         '<div class="row wrap" data-row="target">' +
         [5, 8, 10, 12]

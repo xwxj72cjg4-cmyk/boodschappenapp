@@ -21,6 +21,27 @@ draait dezelfde code op alle apparaten.
 Sets kun je combineren. Nieuwe sets toevoegen kan in `js/decks.js`: één regel
 per kaart, `[jaar, "titel", "extra info"]`.
 
+## Muziek per genre (via Wikipedia)
+
+Naast de vaste sets zijn er genre-sets: Pop, Rock, Hiphop, Dance & elektronisch,
+Disco & funk, R&B & soul, Metal, Country, Jazz en Nederlandstalig. Die komen uit
+[Wikidata](https://www.wikidata.org), de database achter Wikipedia:
+
+- per genre (inclusief subgenres) de bekendste nummers, gemeten aan het aantal
+  Wikipedia-talen met een artikel over het nummer;
+- het jaar is de vroegste publicatiedatum in Wikidata;
+- alleen nummers waarvan Apple een fragment heeft, komen erin.
+
+Het script `tools/bouw-muziek.mjs` maakt daarvan `js/muziek-db.js`. Het draait
+automatisch op GitHub (*Actions* → *Tijdlijn – muziekdatabase bouwen*, of met
+*Run workflow*) en zet het resultaat terug in de branch. De eerste run duurt
+ongeveer anderhalf uur, omdat Apple maar ~20 zoekopdrachten per minuut toestaat.
+Daarna gaat het snel dankzij `tools/itunes-cache.json`. Meer nummers per genre:
+zet `PER_GENRE` (standaard 150) hoger.
+
+Let op: Wikidata wordt door vrijwilligers bijgehouden. Een enkel jaartal kan
+afwijken, bijvoorbeeld het jaar van een heruitgave.
+
 ## Spelregels
 
 1. Iedere speler (2–8) begint met één open kaart.
@@ -130,7 +151,9 @@ Er zijn drie manieren, van makkelijk naar mooi:
 tijdlijnspel/
 ├── index.html            app-shell
 ├── css/style.css         opmaak (schaalt van telefoon tot 4K-tv)
-├── js/decks.js           alle kaartensets
+├── js/decks.js           vaste kaartensets
+├── js/muziek-db.js       genre-sets uit Wikidata (automatisch gemaakt)
+├── tools/                bouwscript voor de genre-sets
 ├── js/app.js             spel-logica, schermen, afstandsbediening, fragmenten
 ├── sw.js                 offline-cache (PWA)
 ├── manifest.webmanifest  PWA-gegevens voor iPhone/iPad
