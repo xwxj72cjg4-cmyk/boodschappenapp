@@ -1,0 +1,66 @@
+name: Tijdlijn – nummers uit Deezer-playlists importeren
+
+# Importeert nieuwe nummers uit de Deezer-playlists in tijdlijnspel/tools/playlists.json
+# (jaar gecontroleerd via MusicBrainz), slaat ze op in tijdlijnspel/js/muziek-extra.js en
+# werkt de site-branch voor Netlify bij. Afwijkende jaren komen in tools/import-controle.json.
+on:
+  schedule:
+    - cron: "17 5 * * 1" # elke maandag rond 07:17 Nederlandse tijd
+  workflow_dispatch:
+    inputs:
+      playlist:
+        description: "Deezer-playlist-ID of -link (leeg = alle playlists uit playlists.json)"
+        required: false
+      naam:
+        description: "Naam van de set (alleen bij een losse playlist, standaard 'Recente hits')"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tijdlijn-import-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Importeren
+        env:
+          PLAYLIST: ${{ inputs.playlist }}
+          NAAM: ${{ inputs.naam }}
+        run: |
+          if [ -n "$PLAYLIST" ]; then
+            node scripts/import-playlists.js "$PLAYLIST" "$NAAM"
+          else
+            node scripts/import-playlists.js
+          fi
+      - name: Resultaat opslaan in de branch
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p /tmp/uit
+          for f in tijdlijnspel/js/muziek-extra.js tijdlijnspel/tools/import-controle.json; do
+            [ -f "$f" ] && cp "$f" /tmp/uit/
+          done
+          # Bovenop de nieuwste stand van de branch zetten (andere workflows kunnen intussen gepusht hebben).
+          git fetch origin "${GITHUB_REF_NAME}"
+          git checkout -f -B opslaan "origin/${GITHUB_REF_NAME}"
+          [ -f /tmp/uit/muziek-extra.js ] && cp /tmp/uit/muziek-extra.js tijdlijnspel/js/
+          [ -f /tmp/uit/import-controle.json ] && cp /tmp/uit/import-controle.json tijdlijnspel/tools/
+          git add tijdlijnspel/js/muziek-extra.js tijdlijnspel/tools/import-controle.json 2>/dev/null || true
+          if git diff --cached --quiet; then echo "Niets nieuws"; echo "NIEUW=0" >> "$GITHUB_ENV"; exit 0; fi
+          git commit -m "Tijdlijn: nummers geïmporteerd uit Deezer-playlists"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo "NIEUW=1" >> "$GITHUB_ENV"
+      - name: Site-branch voor Netlify bijwerken
+        # Pushes met de standaard-token starten geen andere workflows, dus hier zelf doen.
+        if: success() && env.NIEUW == '1'
+        run: tijdlijnspel/tools/publiceer-site.sh "${{ github.token }}"

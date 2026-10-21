@@ -68,6 +68,26 @@ Met `--droog` zie je eerst wat er zou gebeuren, zonder iets weg te schrijven. He
 tussen verzoeken (MusicBrainz staat 1 verzoek per seconde toe), dus 100 nummers duren ongeveer
 twee minuten. `muziek-extra.js` wordt niet door `tools/bouw-muziek.mjs` overschreven.
 
+### Automatisch importeren (elk apparaat krijgt de nieuwe nummers)
+
+De workflow `.github/workflows/tijdlijn-import.yml` draait **elke maandagochtend** en importeert
+alle playlists uit `tools/playlists.json`:
+
+```json
+{
+  "playlists": [
+    { "id": "1234567890", "set": "recent", "naam": "Recente hits" },
+    { "id": "9876543210", "set": "zomer", "naam": "Zomerhits", "marge": 1 }
+  ]
+}
+```
+
+Een losse playlist kan ook met de hand: op GitHub *Actions → Tijdlijn – nummers uit
+Deezer-playlists importeren → Run workflow* en vul het ID of de link in. Na afloop slaat de
+workflow `js/muziek-extra.js` en `tools/import-controle.json` op en werkt hij de branch
+`tijdlijn-site` bij. Netlify zet het daarna online. Let op: GitHub draait geplande en
+handmatige workflows alleen vanaf `main`, dus dit werkt pas als de code daar staat.
+
 ## Spelregels
 
 1. Iedere speler (2–8) begint met één open kaart.
