@@ -31,6 +31,8 @@ Disco & funk, R&B & soul, Metal, Country, Jazz en Nederlandstalig. Met
 - per genre (inclusief subgenres) de bekendste nummers, gemeten aan het aantal
   Wikipedia-talen met een artikel over het nummer;
 - het jaar is de vroegste publicatiedatum in Wikidata;
+- alleen Engels- en Nederlandstalige nummers (op taal, of anders op land van
+  herkomst: Engelstalige landen, Nederland, België en Scandinavië);
 - alleen nummers waarvan Apple een fragment heeft, komen erin.
 
 Het script `tools/bouw-muziek.mjs` maakt daarvan `js/muziek-db.js`. Het draait

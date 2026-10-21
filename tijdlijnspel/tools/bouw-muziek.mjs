@@ -108,6 +108,42 @@ async function songRows(filter, minLinks, attempts) {
     }`, attempts);
 }
 
+// Alleen Engels- en Nederlandstalige nummers. Taal (P407) bekend: die beslist. Anders het land
+// van herkomst (P495): Engelstalige landen, Nederland, België en Scandinavië (zingen vaak Engels).
+// Weten we geen van beide, dan houden we het nummer.
+const LANGUAGES = new Set(["Q1860", "Q7411"]); // Engels, Nederlands
+const COUNTRIES = new Set([
+  "Q30", "Q145", "Q16", "Q408", "Q27", "Q664", "Q766", // VS, VK, Canada, Australië, Ierland, Nieuw-Zeeland, Jamaica
+  "Q55", "Q31", // Nederland, België
+  "Q34", "Q20", "Q35", // Zweden, Noorwegen, Denemarken
+]);
+
+async function onlyEnglishOrDutch(songs) {
+  const info = new Map(songs.map((s) => [s.id, { langs: [], countries: [] }]));
+  const ids = songs.map((s) => s.id);
+  for (let i = 0; i < ids.length; i += 200) {
+    const rows = await sparql(`
+      SELECT ?song ?lang ?country WHERE {
+        VALUES ?song { ${ids.slice(i, i + 200).map((id) => "wd:" + id).join(" ")} }
+        OPTIONAL { ?song wdt:P407 ?lang }
+        OPTIONAL { ?song wdt:P495 ?country }
+      }`);
+    for (const r of rows) {
+      const e = info.get(qid(r.song.value));
+      if (r.lang) e.langs.push(qid(r.lang.value));
+      if (r.country) e.countries.push(qid(r.country.value));
+    }
+  }
+  const keep = songs.filter((s) => {
+    const { langs, countries } = info.get(s.id);
+    if (langs.length) return langs.some((l) => LANGUAGES.has(l));
+    if (countries.length) return countries.some((c) => COUNTRIES.has(c));
+    return true;
+  });
+  console.log(`  taalfilter: ${keep.length} van ${songs.length} over`);
+  return keep;
+}
+
 // Lukt een groep genres niet, dan splitsen we hem; één genre dat steeds faalt, slaan we over.
 async function chunkRows(genreIds, minLinks) {
   const filter = `VALUES ?g { ${genreIds.map((id) => "wd:" + id).join(" ")} } ?song wdt:P136 ?g .`;
@@ -169,10 +205,11 @@ async function songs(genre) {
     }
     bySong.set(id, s);
   }
-  const ranked = [...bySong.values()]
+  const candidates = [...bySong.values()]
     .filter((s) => s.year >= 1900 && s.year <= THIS_YEAR)
     .sort((a, b) => b.links - a.links)
-    .slice(0, PER_GENRE * 4);
+    .slice(0, PER_GENRE * 6);
+  const ranked = genre.language ? candidates : await onlyEnglishOrDutch(candidates);
 
   const name = await labels(ranked.flatMap((s) => [s.id, s.artist]), !!genre.language);
   const perArtist = {};
