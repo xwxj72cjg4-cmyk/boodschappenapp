@@ -35,8 +35,8 @@ const GENRES = [
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function sparql(query) {
-  for (let attempt = 1; attempt <= 4; attempt++) {
+async function sparql(query, attempts = 4) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
     const res = await fetch("https://query.wikidata.org/sparql", {
       method: "POST",
       headers: {
@@ -46,8 +46,17 @@ async function sparql(query) {
       },
       body: "query=" + encodeURIComponent(query),
     });
-    if (res.ok) return (await res.json()).results.bindings;
-    console.warn(`  Wikidata gaf ${res.status} (poging ${attempt})`);
+    if (res.ok) {
+      // Bij een time-out kapt Wikidata het antwoord soms halverwege af: dan is de JSON stuk.
+      const text = await res.text();
+      try {
+        return JSON.parse(text).results.bindings;
+      } catch (e) {
+        console.warn(`  Wikidata-antwoord afgebroken (poging ${attempt})`);
+      }
+    } else {
+      console.warn(`  Wikidata gaf ${res.status} (poging ${attempt})`);
+    }
     await sleep(5000 * attempt);
   }
   throw new Error("Wikidata-query mislukt");
@@ -86,7 +95,7 @@ const MAX_PER_ARTIST = 4;
 const qid = (uri) => uri.split("/").pop();
 
 // Nummers (single, lied of muziekwerk) die aan het filter voldoen, zonder namen: snel, ook bij veel genres.
-async function songRows(filter, minLinks) {
+async function songRows(filter, minLinks, attempts) {
   // Q134556 = single, Q7366 = lied, Q2188189 = muziekwerk
   return sparql(`
     SELECT ?song ?n ?date ?artist ?an WHERE {
@@ -96,7 +105,22 @@ async function songRows(filter, minLinks) {
       FILTER(?n >= ${minLinks})
       ?song wdt:P577 ?date ; wdt:P175 ?artist .
       ?artist wikibase:sitelinks ?an .
-    }`);
+    }`, attempts);
+}
+
+// Lukt een groep genres niet, dan splitsen we hem; één genre dat steeds faalt, slaan we over.
+async function chunkRows(genreIds, minLinks) {
+  const filter = `VALUES ?g { ${genreIds.map((id) => "wd:" + id).join(" ")} } ?song wdt:P136 ?g .`;
+  try {
+    return await songRows(filter, minLinks, genreIds.length > 1 ? 2 : 3);
+  } catch (e) {
+    if (genreIds.length === 1) {
+      console.warn(`  Genre ${genreIds[0]} overgeslagen`);
+      return [];
+    }
+    const half = Math.ceil(genreIds.length / 2);
+    return (await chunkRows(genreIds.slice(0, half), minLinks)).concat(await chunkRows(genreIds.slice(half), minLinks));
+  }
 }
 
 // Namen ophalen via de Wikidata-API (50 per keer), Nederlands of Engels.
@@ -127,10 +151,7 @@ async function songs(genre) {
     const ids = new Set();
     for (const root of genre.roots) (await genreItems(root)).forEach((id) => ids.add(id));
     const list = [...ids];
-    for (let i = 0; i < list.length; i += 60) {
-      const chunk = list.slice(i, i + 60).map((id) => "wd:" + id).join(" ");
-      rows = rows.concat(await songRows(`VALUES ?g { ${chunk} } ?song wdt:P136 ?g .`, minLinks));
-    }
+    for (let i = 0; i < list.length; i += 40) rows = rows.concat(await chunkRows(list.slice(i, i + 40), minLinks));
   }
 
   // Samenvoegen per nummer: vroegste jaar, alle artiesten.
