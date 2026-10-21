@@ -71,38 +71,85 @@ async function genreItems(label) {
   return subs.map((r) => r.g.value.split("/").pop());
 }
 
+const MAX_PER_ARTIST = 4;
+const qid = (uri) => uri.split("/").pop();
+
+// Nummers (single, lied of muziekwerk) die aan het filter voldoen, zonder namen: snel, ook bij veel genres.
+async function songRows(filter, minLinks) {
+  // Q134556 = single, Q7366 = lied, Q2188189 = muziekwerk
+  return sparql(`
+    SELECT ?song ?n ?date ?artist WHERE {
+      ${filter}
+      VALUES ?type { wd:Q134556 wd:Q7366 wd:Q2188189 }
+      ?song wdt:P31 ?type ; wikibase:sitelinks ?n .
+      FILTER(?n >= ${minLinks})
+      ?song wdt:P577 ?date ; wdt:P175 ?artist .
+    }`);
+}
+
+// Namen ophalen via de Wikidata-API (50 per keer), Nederlands of Engels.
+const labelCache = {};
+async function labels(ids, preferNl) {
+  const todo = [...new Set(ids)].filter((id) => !(id in labelCache));
+  for (let i = 0; i < todo.length; i += 50) {
+    const url =
+      "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&props=labels&languages=nl|en&ids=" +
+      todo.slice(i, i + 50).join("|");
+    const res = await fetch(url, { headers: { "User-Agent": UA } });
+    const data = await res.json();
+    for (const [id, e] of Object.entries(data.entities || {})) labelCache[id] = e.labels || {};
+  }
+  return (id) => {
+    const l = labelCache[id] || {};
+    const pick = preferNl ? l.nl || l.en : l.en || l.nl;
+    return pick ? pick.value : null;
+  };
+}
+
 async function songs(genre) {
-  let filter;
+  const minLinks = genre.minLinks || 5;
+  let rows = [];
   if (genre.language) {
-    filter = `?song wdt:P407 wd:${genre.language} .`;
+    rows = await songRows(`?song wdt:P407 wd:${genre.language} .`, minLinks);
   } else {
     const ids = new Set();
     for (const root of genre.roots) (await genreItems(root)).forEach((id) => ids.add(id));
-    filter = `VALUES ?g { ${[...ids].map((id) => "wd:" + id).join(" ")} } ?song wdt:P136 ?g .`;
-  }
-  // Q134556 = single, Q7366 = lied, Q2188189 = muziekwerk
-  const rows = await sparql(`
-    SELECT ?song (SAMPLE(?t) AS ?title) (GROUP_CONCAT(DISTINCT ?a; separator=" & ") AS ?artists)
-           (MIN(YEAR(?date)) AS ?year) (MAX(?n) AS ?links) WHERE {
-      ${filter}
-      VALUES ?type { wd:Q134556 wd:Q7366 wd:Q2188189 }
-      ?song wdt:P31 ?type ; wdt:P577 ?date ; wdt:P175 ?artist ; wikibase:sitelinks ?n .
-      FILTER(?n >= ${genre.minLinks || 5})
-      SERVICE wikibase:label {
-        bd:serviceParam wikibase:language "${genre.language ? "nl,en" : "en,nl"}" .
-        ?song rdfs:label ?t . ?artist rdfs:label ?a .
-      }
+    const list = [...ids];
+    for (let i = 0; i < list.length; i += 60) {
+      const chunk = list.slice(i, i + 60).map((id) => "wd:" + id).join(" ");
+      rows = rows.concat(await songRows(`VALUES ?g { ${chunk} } ?song wdt:P136 ?g .`, minLinks));
     }
-    GROUP BY ?song ORDER BY DESC(?links) LIMIT ${PER_GENRE * 3}`);
-  return rows
-    .map((r) => ({
-      id: r.song.value.split("/").pop(),
-      title: r.title.value,
-      artist: r.artists.value.split(" & ").slice(0, 2).join(" & "),
-      year: Number(r.year.value),
-      links: Number(r.links.value),
-    }))
-    .filter((s) => s.year >= 1900 && s.year <= THIS_YEAR && !/^Q\d+$/.test(s.title));
+  }
+
+  // Samenvoegen per nummer: vroegste jaar, alle artiesten.
+  const bySong = new Map();
+  for (const r of rows) {
+    const id = qid(r.song.value);
+    const year = Number(r.date.value.slice(0, r.date.value.startsWith("-") ? 5 : 4));
+    const s = bySong.get(id) || { id, year, links: Number(r.n.value), artists: [] };
+    s.year = Math.min(s.year, year);
+    const a = qid(r.artist.value);
+    if (!s.artists.includes(a)) s.artists.push(a);
+    bySong.set(id, s);
+  }
+  const ranked = [...bySong.values()]
+    .filter((s) => s.year >= 1900 && s.year <= THIS_YEAR)
+    .sort((a, b) => b.links - a.links)
+    .slice(0, PER_GENRE * 4);
+
+  const name = await labels(ranked.flatMap((s) => [s.id, ...s.artists.slice(0, 2)]), !!genre.language);
+  const perArtist = {};
+  const result = [];
+  for (const s of ranked) {
+    const title = name(s.id);
+    const artists = s.artists.slice(0, 2).map(name);
+    if (!title || artists.some((a) => !a)) continue;
+    const main = s.artists[0];
+    perArtist[main] = (perArtist[main] || 0) + 1;
+    if (perArtist[main] > MAX_PER_ARTIST) continue; // meer afwisseling
+    result.push({ id: s.id, title, artist: artists.join(" & "), year: s.year, links: s.links });
+  }
+  return result;
 }
 
 // ---------- Apple: bestaat er een fragment? ----------
@@ -144,7 +191,7 @@ for (const genre of GENRES) {
   const list = await songs(genre);
   console.log(`  ${list.length} kandidaten uit Wikidata`);
   if (ONLY_WIKIDATA) {
-    list.slice(0, 8).concat(list.slice(-4)).forEach((s) => console.log(`    ${s.year}  ${s.artist} – ${s.title}  (${s.links})`));
+    (list.length > 12 ? list.slice(0, 8).concat(list.slice(-4)) : list).forEach((s) => console.log(`    ${s.year}  ${s.artist} – ${s.title}  (${s.links})`));
     continue;
   }
   const cards = [];
