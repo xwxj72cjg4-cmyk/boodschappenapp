@@ -109,8 +109,9 @@ async function songRows(filter, minLinks, attempts) {
 }
 
 // Alleen Engels- en Nederlandstalige nummers. Taal (P407) bekend: die beslist. Anders het land
-// van herkomst (P495): Engelstalige landen, Nederland, België en Scandinavië (zingen vaak Engels).
-// Weten we geen van beide, dan houden we het nummer.
+// van herkomst van het nummer (P495), en anders dat van de artiest (land van herkomst P495 of
+// nationaliteit P27): Engelstalige landen, Nederland, België en Scandinavië (zingen vaak Engels).
+// Weten we niets, dan houden we het nummer.
 const LANGUAGES = new Set(["Q1860", "Q7411"]); // Engels, Nederlands
 const COUNTRIES = new Set([
   "Q30", "Q145", "Q16", "Q408", "Q27", "Q664", "Q766", // VS, VK, Canada, Australië, Ierland, Nieuw-Zeeland, Jamaica
@@ -134,10 +135,28 @@ async function onlyEnglishOrDutch(songs) {
       if (r.country) e.countries.push(qid(r.country.value));
     }
   }
+  // Land van de artiest, alleen nodig voor nummers zonder taal en zonder land.
+  const unknown = songs.filter((s) => !info.get(s.id).langs.length && !info.get(s.id).countries.length);
+  const artistCountries = new Map();
+  const artists = [...new Set(unknown.map((s) => s.artist))];
+  for (let i = 0; i < artists.length; i += 200) {
+    const rows = await sparql(`
+      SELECT ?artist ?country WHERE {
+        VALUES ?artist { ${artists.slice(i, i + 200).map((id) => "wd:" + id).join(" ")} }
+        { ?artist wdt:P495 ?country } UNION { ?artist wdt:P27 ?country }
+      }`);
+    for (const r of rows) {
+      const a = qid(r.artist.value);
+      if (!artistCountries.has(a)) artistCountries.set(a, []);
+      artistCountries.get(a).push(qid(r.country.value));
+    }
+  }
   const keep = songs.filter((s) => {
     const { langs, countries } = info.get(s.id);
     if (langs.length) return langs.some((l) => LANGUAGES.has(l));
     if (countries.length) return countries.some((c) => COUNTRIES.has(c));
+    const fromArtist = artistCountries.get(s.artist);
+    if (fromArtist) return fromArtist.some((c) => COUNTRIES.has(c));
     return true;
   });
   console.log(`  taalfilter: ${keep.length} van ${songs.length} over`);
