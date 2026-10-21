@@ -106,10 +106,12 @@ De map `tijdlijnspel` is een losse statische site. Twee gratis opties:
 
 - **Netlify Drop (het snelst):** ga naar <https://app.netlify.com/drop> en sleep
   de map `tijdlijnspel` erin. Je krijgt meteen een https-adres.
-- **Netlify gekoppeld aan GitHub (aanbevolen):** *Add new site → Import an
-  existing project → GitHub* en kies deze repo. De instellingen staan in
-  `netlify.toml`, dus je hoeft niets in te vullen. Elke wijziging op GitHub komt
-  daarna vanzelf online.
+- **Netlify gekoppeld aan GitHub (aanbevolen):** GitHub zet het spel automatisch
+  in de branch `tijdlijn-site` (zie `.github/workflows/tijdlijn-site.yml`). Koppel
+  in Netlify de repo en kies bij *Branch to deploy* **`tijdlijn-site`**; laat Base
+  directory, Build command en Publish directory leeg. De instellingen staan in
+  `netlify.toml`. Via de gewone branches lukt het niet: dan ziet Netlify de
+  Next.js-boodschappenapp in de hoofdmap en dwingt hij een Next.js-build af.
 - **Vercel:** maak een *nieuw* project van deze repo en zet bij
   *Root Directory* `tijdlijnspel` (framework: *Other*). Zo blijft het los van de
   boodschappenapp.

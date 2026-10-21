@@ -62,3 +62,7 @@ jobs:
           if git diff --cached --quiet; then echo "Niets veranderd"; exit 0; fi
           git commit -m "Tijdlijn: muziekdatabase bijgewerkt uit Wikidata"
           git push origin "HEAD:${GITHUB_REF_NAME}"
+      - name: Site-branch voor Netlify bijwerken
+        # Pushes met de standaard-token starten geen andere workflows, dus hier zelf doen.
+        if: success()
+        run: tijdlijnspel/tools/publiceer-site.sh "${{ github.token }}"

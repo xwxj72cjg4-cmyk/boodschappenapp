@@ -1,0 +1,27 @@
+name: Tijdlijn – site-branch bijwerken
+
+# Zet de inhoud van tijdlijnspel/ (zonder het bouwgereedschap) in de branch "tijdlijn-site".
+# Netlify publiceert die branch. Zo ziet Netlify de Next.js-boodschappenapp in de hoofdmap niet,
+# die anders een Next.js-build afdwingt en de deploy laat mislukken.
+on:
+  push:
+    branches: [main, claude/mobile-tv-game-app-udgnc9]
+    paths:
+      - "tijdlijnspel/**"
+      - ".github/workflows/tijdlijn-site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tijdlijn-site
+  cancel-in-progress: true
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Site samenstellen en publiceren
+        run: tijdlijnspel/tools/publiceer-site.sh "${{ github.token }}"
