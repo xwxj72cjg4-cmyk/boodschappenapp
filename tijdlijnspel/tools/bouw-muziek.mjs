@@ -54,17 +54,28 @@ async function sparql(query) {
 }
 
 // Zoek het genre-item met deze naam (bij meerdere: het bekendste) en al zijn subgenres.
+// Spellingen om te proberen: "hip hop music" → ook "hip-hop music", "hip hop", "hip-hop".
+function variants(label) {
+  const base = [label, label.replace(/ music$/, "")];
+  const all = base.concat(base.map((l) => l.replace(/ (?!music$)/g, "-")), base.map((l) => l.replace(/-/g, " ")));
+  return [...new Set(all)].map((l) => JSON.stringify(l) + "@en").join(" ");
+}
+
 async function genreItems(label) {
-  // Q188451 = muziekgenre. Bij geen treffer zoeken we zonder die eis.
-  let rows = await sparql(`
-    SELECT ?g ?n WHERE {
-      ?g rdfs:label "${label}"@en ; wdt:P31/wdt:P279* wd:Q188451 ; wikibase:sitelinks ?n .
-    } ORDER BY DESC(?n) LIMIT 1`);
+  // Q188451 = muziekgenre. Naam of alias; bij geen treffer zoeken we zonder die genre-eis.
+  const find = (typed) =>
+    sparql(`
+      SELECT ?g ?n WHERE {
+        VALUES ?l { ${variants(label)} }
+        ?g rdfs:label|skos:altLabel ?l ; wikibase:sitelinks ?n .
+        ${typed ? "?g wdt:P31/wdt:P279* wd:Q188451 ." : ""}
+      } ORDER BY DESC(?n) LIMIT 1`);
+  let rows = await find(true);
+  if (!rows.length) rows = await find(false);
   if (!rows.length) {
-    rows = await sparql(`
-      SELECT ?g ?n WHERE { ?g rdfs:label "${label}"@en ; wikibase:sitelinks ?n . } ORDER BY DESC(?n) LIMIT 1`);
+    console.warn(`  Genre niet gevonden, overgeslagen: ${label}`);
+    return [];
   }
-  if (!rows.length) throw new Error(`Genre niet gevonden: ${label}`);
   const root = rows[0].g.value.split("/").pop();
   const subs = await sparql(`SELECT DISTINCT ?g WHERE { ?g wdt:P279* wd:${root} . }`);
   console.log(`  ${label} = ${root}, ${subs.length} (sub)genres`);
@@ -78,12 +89,13 @@ const qid = (uri) => uri.split("/").pop();
 async function songRows(filter, minLinks) {
   // Q134556 = single, Q7366 = lied, Q2188189 = muziekwerk
   return sparql(`
-    SELECT ?song ?n ?date ?artist WHERE {
+    SELECT ?song ?n ?date ?artist ?an WHERE {
       ${filter}
       VALUES ?type { wd:Q134556 wd:Q7366 wd:Q2188189 }
       ?song wdt:P31 ?type ; wikibase:sitelinks ?n .
       FILTER(?n >= ${minLinks})
       ?song wdt:P577 ?date ; wdt:P175 ?artist .
+      ?artist wikibase:sitelinks ?an .
     }`);
 }
 
@@ -126,10 +138,14 @@ async function songs(genre) {
   for (const r of rows) {
     const id = qid(r.song.value);
     const year = Number(r.date.value.slice(0, r.date.value.startsWith("-") ? 5 : 4));
-    const s = bySong.get(id) || { id, year, links: Number(r.n.value), artists: [] };
+    const s = bySong.get(id) || { id, year, links: Number(r.n.value), artist: null, artistLinks: -1 };
     s.year = Math.min(s.year, year);
-    const a = qid(r.artist.value);
-    if (!s.artists.includes(a)) s.artists.push(a);
+    // Bij meerdere uitvoerders (vaak covers) houden we de bekendste.
+    const an = Number(r.an.value);
+    if (an > s.artistLinks) {
+      s.artist = qid(r.artist.value);
+      s.artistLinks = an;
+    }
     bySong.set(id, s);
   }
   const ranked = [...bySong.values()]
@@ -137,17 +153,16 @@ async function songs(genre) {
     .sort((a, b) => b.links - a.links)
     .slice(0, PER_GENRE * 4);
 
-  const name = await labels(ranked.flatMap((s) => [s.id, ...s.artists.slice(0, 2)]), !!genre.language);
+  const name = await labels(ranked.flatMap((s) => [s.id, s.artist]), !!genre.language);
   const perArtist = {};
   const result = [];
   for (const s of ranked) {
     const title = name(s.id);
-    const artists = s.artists.slice(0, 2).map(name);
-    if (!title || artists.some((a) => !a)) continue;
-    const main = s.artists[0];
-    perArtist[main] = (perArtist[main] || 0) + 1;
-    if (perArtist[main] > MAX_PER_ARTIST) continue; // meer afwisseling
-    result.push({ id: s.id, title, artist: artists.join(" & "), year: s.year, links: s.links });
+    const artist = name(s.artist);
+    if (!title || !artist) continue;
+    perArtist[s.artist] = (perArtist[s.artist] || 0) + 1;
+    if (perArtist[s.artist] > MAX_PER_ARTIST) continue; // meer afwisseling
+    result.push({ id: s.id, title, artist, year: s.year, links: s.links });
   }
   return result;
 }
