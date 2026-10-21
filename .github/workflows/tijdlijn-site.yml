@@ -5,7 +5,7 @@ name: Tijdlijn – site-branch bijwerken
 # die anders een Next.js-build afdwingt en de deploy laat mislukken.
 on:
   push:
-    branches: [main, claude/mobile-tv-game-app-udgnc9]
+    branches: [main] # de site volgt alleen main; andere branches zouden elkaar overschrijven
     paths:
       - "tijdlijnspel/**"
       - ".github/workflows/tijdlijn-site.yml"
