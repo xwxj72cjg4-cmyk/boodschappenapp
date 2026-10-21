@@ -48,7 +48,7 @@ afwijken, bijvoorbeeld het jaar van een heruitgave.
 ## Nummers uit een Deezer-playlist toevoegen
 
 ```bash
-node scripts/import-recent.js <playlist-id, link of chart> [--set recent] [--naam "Recente hits"] [--marge 1] [--droog]
+node scripts/import-recent.js <playlist-id, link, top-nl, top-be of top-wereld> [--set recent] [--naam "Recente hits"] [--marge 1] [--droog]
 ```
 
 Het script (Node 18+, geen installatie nodig) haalt alle nummers uit de playlist op. Per nummer:
@@ -71,8 +71,9 @@ twee minuten. `muziek-extra.js` wordt niet door `tools/bouw-muziek.mjs` overschr
 ### Automatisch importeren (elk apparaat krijgt de nieuwe nummers)
 
 De workflow `.github/workflows/tijdlijn-import.yml` draait **elke maandagochtend** en importeert
-alle playlists uit `tools/playlists.json`. Standaard staat daar alleen `"chart"`: de actuele
-Deezer-top-100, waarvoor je geen playlist of account nodig hebt. Zo komen er elke week vanzelf de
+alle playlists uit `tools/playlists.json`. Standaard staat daar alleen `"top-nl"`: de officiële
+Deezer-lijst *Top Netherlands*, waarvoor je geen playlist of account nodig hebt (ook `top-be` en
+`top-wereld` kunnen). Zo komen er elke week vanzelf de
 nieuwste hits bij. Eigen of openbare playlists voeg je zo toe:
 
 ```json
