@@ -56,6 +56,14 @@ afwijken, bijvoorbeeld het jaar van een heruitgave.
 6. **Munten 🪙**: je begint met 2. Raad je bij muziek titel én artiest goed,
    dan krijg je er een bij. Met een munt mag je een kaart overslaan.
 
+## Feest bij een goed antwoord
+
+Leg je een kaart goed, dan zakt er een vlaggetjesslinger naar beneden, dwarrelen
+er confetti en serpentines over het scherm en klinkt er een ta-da met applaus.
+Bij de winnaar is het feest groter. Slinger, confetti en geluid worden in de
+browser zelf gemaakt (canvas en Web Audio), dus er zijn geen geluidsbestanden of
+internet voor nodig. Uitzetten kan bij *Nieuw spel* → *Feest bij goed antwoord*.
+
 ## Muziek afspelen
 
 Bij *Nieuw spel* kies je hoe de muziekkaarten klinken:
@@ -158,6 +166,7 @@ tijdlijnspel/
 ├── js/muziek-db.js       genre-sets uit Wikidata (automatisch gemaakt)
 ├── tools/                bouwscript voor de genre-sets
 ├── js/app.js             spel-logica, schermen, afstandsbediening, fragmenten
+├── js/feest.js           slingers, confetti en applaus bij een goed antwoord
 ├── sw.js                 offline-cache (PWA)
 ├── manifest.webmanifest  PWA-gegevens voor iPhone/iPad
 ├── appinfo.json          gegevens voor de LG webOS-app

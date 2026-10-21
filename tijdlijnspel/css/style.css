@@ -287,6 +287,36 @@ textarea.input { resize: vertical; line-height: 1.5; }
 .ranking li { display: flex; justify-content: space-between; padding: 0.5rem 1rem; background: var(--panel); border-radius: 0.7rem; }
 .ranking li:first-child { background: rgba(255, 204, 51, 0.18); color: var(--accent); }
 
+/* ---------- Feest ---------- */
+
+.feest { position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: hidden; }
+.feest canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.bunting {
+  position: absolute;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  height: 9rem;
+  animation: bunting-drop 0.7s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+}
+.bunting-rope { position: absolute; top: 0; left: 0; width: 100%; overflow: visible; }
+.bunting-rope path { fill: none; stroke: rgba(255, 255, 255, 0.7); stroke-width: 2; }
+.bunting i {
+  position: absolute;
+  width: clamp(1.6rem, 3.2vw, 3.4rem);
+  height: clamp(2rem, 4vw, 4.2rem);
+  margin-left: calc(clamp(1.6rem, 3.2vw, 3.4rem) / -2);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  transform-origin: 50% 0;
+  transform: rotate(var(--r));
+  animation: flag-wave 1.4s ease-in-out infinite alternate;
+}
+@keyframes bunting-drop { from { transform: translateY(-110%); } to { transform: translateY(0); } }
+@keyframes flag-wave {
+  from { transform: rotate(calc(var(--r) - 6deg)); }
+  to { transform: rotate(calc(var(--r) + 6deg)); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

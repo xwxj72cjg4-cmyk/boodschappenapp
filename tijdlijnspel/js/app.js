@@ -170,6 +170,7 @@
     target: saved.target || 10,
     // "fragment" = 30 sec. via Apple, direct in de app; "lezen" = kaart voorlezen
     playback: saved.playback === "lezen" || saved.audio === false ? "lezen" : "fragment",
+    party: saved.party !== false, // slingers, confetti en applaus bij een goed antwoord
   };
 
   let game = null;
@@ -233,6 +234,7 @@
 
   function go(name) {
     if (name !== "play") stopAudio();
+    window.Feest.stop();
     screen = name;
     render();
   }
@@ -395,6 +397,8 @@
           .map((n) => '<button class="chip' + (settings.target === n ? " on" : "") + '" data-target="' + n + '">' + n + " kaarten</button>")
           .join("") +
         "</div>" +
+        '<div class="row wrap" data-row="party"><button class="chip' + (settings.party ? " on" : "") + '" data-party>🎉 Feest bij goed antwoord ' +
+        (settings.party ? "aan" : "uit") + "</button></div>" +
         "<h3>Muziek afspelen</h3>" +
         '<div class="row wrap" data-row="playback">' +
         PLAYBACK.map(
@@ -540,10 +544,15 @@
     game.result = { card: game.card, good, bonusAsked: false };
     game.card = null;
     go("reveal");
+    if (good && settings.party) window.Feest.start();
   }
 
   function nextTurn() {
-    if (player().timeline.length >= settings.target || !game.pile.length) return go("end");
+    if (player().timeline.length >= settings.target || !game.pile.length) {
+      go("end");
+      if (settings.party) window.Feest.start({ big: true });
+      return;
+    }
     game.current = (game.current + 1) % game.players.length;
     go("turn");
   }
@@ -596,6 +605,12 @@
       render();
       return app.querySelector('[data-target="' + d.target + '"]').focus();
     }
+    if ("party" in d) {
+      readPlayerInputs();
+      settings.party = !settings.party;
+      render();
+      return app.querySelector("[data-party]").focus();
+    }
     if (d.playback) {
       readPlayerInputs();
       settings.playback = d.playback;
@@ -612,11 +627,12 @@
       if (!settings.decks.length) return (err.textContent = "Kies minstens één scenario.");
       if (available < settings.players.length + 5)
         return (err.textContent = "Te weinig kaarten voor zoveel spelers. Kies meer scenario's.");
-      save({ players: settings.players, decks: settings.decks, target: settings.target, playback: settings.playback });
+      save({ players: settings.players, decks: settings.decks, target: settings.target, playback: settings.playback, party: settings.party });
       newGame();
       return go("turn");
     }
     if ("begin" in d) {
+      if (settings.party) window.Feest.unlock();
       drawCard();
       go("play");
       if (game.preview) playFragment(false);
