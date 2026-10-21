@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       playlist:
-        description: "Deezer-playlist-ID of -link (leeg = alle playlists uit playlists.json)"
+        description: "Deezer-playlist-ID, -link of \"chart\" (leeg = alles uit playlists.json)"
         required: false
       naam:
         description: "Naam van de set (alleen bij een losse playlist, standaard 'Recente hits')"

@@ -1,3 +1,5 @@
 {
-  "playlists": []
+  "playlists": [
+    { "id": "chart", "set": "recent", "naam": "Recente hits" }
+  ]
 }

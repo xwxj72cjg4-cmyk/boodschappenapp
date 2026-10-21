@@ -7,6 +7,7 @@
 //   node scripts/import-playlists.js <id> [naam]     één playlist
 //
 // playlists.json: { "playlists": [ { "id": "1234567", "set": "recent", "naam": "Recente hits" } ] }
+// Gebruik "chart" als id voor de actuele Deezer-top-100.
 
 "use strict";
 

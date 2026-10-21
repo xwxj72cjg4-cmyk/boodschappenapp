@@ -2,6 +2,7 @@
 // Importeert nummers uit een Deezer-playlist als Tijdlijn-kaartjes.
 //
 //   node scripts/import-recent.js <playlist-id> [--set recent] [--naam "Recente hits"] [--marge 1] [--droog]
+//   node scripts/import-recent.js chart   (de actuele Deezer-top-100, geen playlist of account nodig)
 //
 // Per nummer:
 //   1. titel, artiest en releasedatum komen van Deezer;
@@ -43,9 +44,9 @@ function parseArgs(argv) {
     else if (a === "--droog") opts.droog = true;
     else rest.push(a);
   }
-  // Ook een volledige link mag: https://www.deezer.com/nl/playlist/1234567
+  // Ook een volledige link mag: https://www.deezer.com/nl/playlist/1234567. "chart" = Deezer-top-100.
   const m = String(rest[0] || "").match(/(\d{3,})\s*$/) || String(rest[0] || "").match(/playlist\/(\d+)/);
-  opts.playlist = m ? m[1] : null;
+  opts.playlist = rest[0] === "chart" ? "chart" : m ? m[1] : null;
   if (!/^[a-z0-9-]+$/.test(opts.set) || Number.isNaN(opts.marge)) opts.playlist = null;
   return opts;
 }
@@ -126,6 +127,10 @@ function existingKeys() {
 // ---------- Deezer ----------
 
 async function playlistTracks(id) {
+  if (id === "chart") {
+    const chart = await getJson("https://api.deezer.com/chart/0/tracks?limit=100", "Deezer-top-100");
+    return { title: "Deezer-top-100", tracks: chart.data || [] };
+  }
   const info = await getJson(`https://api.deezer.com/playlist/${id}`, "Deezer-playlist");
   const tracks = [];
   let url = `https://api.deezer.com/playlist/${id}/tracks?limit=100&index=0`;
@@ -207,7 +212,7 @@ function writeReview(items) {
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (!opts.playlist) {
-    console.error('Gebruik: node scripts/import-recent.js <playlist-id of link> [--set recent] [--naam "Recente hits"] [--marge 1] [--droog]');
+    console.error('Gebruik: node scripts/import-recent.js <playlist-id, link of "chart"> [--set recent] [--naam "Recente hits"] [--marge 1] [--droog]');
     process.exit(1);
   }
 
