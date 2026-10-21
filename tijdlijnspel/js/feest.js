@@ -1,4 +1,4 @@
-// Feest bij een goed antwoord: een vlaggetjesslinger, confetti met serpentines en applaus.
+// Feest bij een goed antwoord: een vlaggetjesslinger, confetti met serpentines en een fanfare.
 // Alles wordt in de browser zelf gemaakt (canvas en Web Audio), dus geen bestanden of internet nodig.
 (function () {
   "use strict";
@@ -9,94 +9,32 @@
   let frame = 0;
 
   // ---------- Geluid ----------
+  // De geluiden zelf staan in js/geluiden.js (fanfare, en met publiek bij de winnaar).
 
   let ctx = null;
-  let applauseBuffer = null;
+  let master = null;
 
   function audioContext() {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
-    if (!ctx) ctx = new AC();
+    if (!ctx) {
+      ctx = new AC();
+      // Compressor als vangnet, zodat samenvallende klanken niet oversturen.
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -10;
+      master = ctx.createGain();
+      master.gain.value = 0.9;
+      master.connect(comp);
+      comp.connect(ctx.destination);
+    }
     if (ctx.state === "suspended") ctx.resume();
     return ctx;
   }
 
-  // Applaus = honderden korte ruisklapjes, eerst aanzwellend en dan wegstervend.
-  function makeApplause(ac, seconds) {
-    const rate = ac.sampleRate;
-    const length = Math.floor(rate * seconds);
-    const buffer = ac.createBuffer(2, length, rate);
-    const channels = [buffer.getChannelData(0), buffer.getChannelData(1)];
-    const claps = Math.floor(seconds * 180);
-    for (let c = 0; c < claps; c++) {
-      // Meer klappen in het begin: kwadratische verdeling over de tijd.
-      const t = Math.pow(Math.random(), 1.6) * (seconds - 0.1);
-      const start = Math.floor(t * rate);
-      const dur = Math.floor(rate * (0.008 + Math.random() * 0.012));
-      const gain = (0.25 + Math.random() * 0.35) * Math.max(0.15, 1 - t / seconds);
-      const pan = Math.random();
-      for (let i = 0; i < dur && start + i < length; i++) {
-        const v = (Math.random() * 2 - 1) * gain * Math.exp(-i / (dur / 4));
-        channels[0][start + i] += v * (1 - pan * 0.6);
-        channels[1][start + i] += v * (0.4 + pan * 0.6);
-      }
-    }
-    // Zacht geruis van een publiek eronder.
-    for (let i = 0; i < length; i++) {
-      const env = Math.min(1, i / (rate * 0.15)) * Math.max(0, 1 - i / length);
-      const n = (Math.random() * 2 - 1) * 0.03 * env;
-      channels[0][i] += n;
-      channels[1][i] += n;
-    }
-    return buffer;
-  }
-
-  function tada(ac, at) {
-    // Vrolijk akkoordje omhoog: C5 E5 G5 C6.
-    [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
-      const osc = ac.createOscillator();
-      const g = ac.createGain();
-      osc.type = "triangle";
-      osc.frequency.value = freq;
-      const t = at + i * 0.09;
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.18, t + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.001, t + (i === 3 ? 0.9 : 0.35));
-      osc.connect(g);
-      g.connect(ac.destination);
-      osc.start(t);
-      osc.stop(t + 1);
-    });
-  }
-
   function playSound(big) {
     const ac = audioContext();
-    if (!ac) return;
-    const now = ac.currentTime + 0.02;
-    tada(ac, now);
-    if (!applauseBuffer) applauseBuffer = makeApplause(ac, 3.2);
-    const src = ac.createBufferSource();
-    src.buffer = applauseBuffer;
-    const hp = ac.createBiquadFilter();
-    hp.type = "highpass";
-    hp.frequency.value = 700;
-    const lp = ac.createBiquadFilter();
-    lp.type = "lowpass";
-    lp.frequency.value = 7000;
-    const g = ac.createGain();
-    g.gain.value = big ? 0.9 : 0.6;
-    src.connect(hp);
-    hp.connect(lp);
-    lp.connect(g);
-    g.connect(ac.destination);
-    src.start(now + 0.25);
-    if (big) {
-      // Bij de winnaar een tweede golf applaus.
-      const again = ac.createBufferSource();
-      again.buffer = applauseBuffer;
-      again.connect(hp);
-      again.start(now + 2.2);
-    }
+    if (!ac || !window.Geluiden) return;
+    window.Geluiden[big ? "fanfarePubliek" : "fanfare"](ac, master, ac.currentTime + 0.02);
   }
 
   // ---------- Slinger ----------

@@ -104,8 +104,8 @@ handmatige workflows alleen vanaf `main`, dus dit werkt pas als de code daar sta
 ## Feest bij een goed antwoord
 
 Leg je een kaart goed, dan zakt er een vlaggetjesslinger naar beneden, dwarrelen
-er confetti en serpentines over het scherm en klinkt er een ta-da met applaus.
-Bij de winnaar is het feest groter. Slinger, confetti en geluid worden in de
+er confetti en serpentines over het scherm en klinkt er een fanfare (trompetten, pauken en
+een bekken). Bij de winnaar is het feest groter, met gejuich en applaus na de fanfare. Slinger, confetti en geluid worden in de
 browser zelf gemaakt (canvas en Web Audio), dus er zijn geen geluidsbestanden of
 internet voor nodig. Uitzetten kan bij *Nieuw spel* → *Feest bij goed antwoord*.
 
@@ -218,7 +218,8 @@ tijdlijnspel/
 ├── js/muziek-extra.js    nummers uit Deezer-playlists (scripts/import-recent.js)
 ├── tools/                bouwscript voor de genre-sets
 ├── js/app.js             spel-logica, schermen, afstandsbediening, fragmenten
-├── js/feest.js           slingers, confetti en applaus bij een goed antwoord
+├── js/feest.js           slingers en confetti bij een goed antwoord
+├── js/geluiden.js        de fanfare (Web Audio, werkt offline)
 ├── sw.js                 offline-cache (PWA)
 ├── manifest.webmanifest  PWA-gegevens voor iPhone/iPad
 ├── appinfo.json          gegevens voor de LG webOS-app
