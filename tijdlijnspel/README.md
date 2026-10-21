@@ -36,29 +36,15 @@ per kaart, `[jaar, "titel", "extra info"]`.
 
 Bij *Nieuw spel* kies je hoe de muziekkaarten klinken:
 
-- **🔊 Fragment (30 sec.):** de app speelt zelf een fragment af (zie hieronder).
-- **📱 Spotify-QR:** op de mysteriekaart staat een QR-code, net als bij
-  Hitster. Scan hem met de camera van een telefoon met Spotify en het nummer
-  opent in de Spotify-app. Op hetzelfde toestel kan het ook, met *Open op dit
-  toestel*. Na het onthullen kun je met *Hele nummer op Spotify* verder
-  luisteren.
+- **🔊 Fragment (30 sec.):** het fragment speelt direct in de app zodra je
+  *Pak een kaart* kiest (zie hieronder). Met de knop pauzeer of herstart je het.
 - **📖 Voorlezen:** titel en artiest staan open op de kaart.
 
-Let op bij Spotify: de app laat de titel zien. Laat dus iemand anders (de
-quizmaster) scannen, of houd het scherm van de speler weg.
-
-### Spotify-links
-
-Standaard verwijst de QR-code naar Spotify-zoekresultaten voor *artiest +
-titel*. Het juiste nummer staat dan bovenaan, maar je moet het nog aantikken.
-Wil je dat de QR direct het nummer opent, geef de kaart dan een link:
-
-- In `js/decks.js` zet je een vierde waarde achter de kaart:
-  `[1975, "Bohemian Rhapsody", "Queen", "https://open.spotify.com/track/…"]`.
-  Een losse track-ID of `spotify:track:…` mag ook.
-- Bij *Eigen kaarten* plak je de link achteraan de regel:
-  `1975; Bohemian Rhapsody; Queen; https://open.spotify.com/track/…`
-  (in Spotify: ··· → Delen → Kopieer link naar nummer).
+Na het onthullen kun je met *Hele nummer op Spotify* verder luisteren. Standaard
+opent dat de zoekresultaten voor *artiest + titel*. Wil je het nummer direct
+openen, geef de kaart dan een Spotify-link als vierde waarde:
+`[1975, "Bohemian Rhapsody", "Queen", "https://open.spotify.com/track/…"]`.
+Bij *Eigen kaarten* plak je de link achteraan de regel.
 
 ### Muziekfragmenten
 
@@ -145,8 +131,7 @@ tijdlijnspel/
 ├── index.html            app-shell
 ├── css/style.css         opmaak (schaalt van telefoon tot 4K-tv)
 ├── js/decks.js           alle kaartensets
-├── js/app.js             spel-logica, schermen, afstandsbediening, fragmenten, QR
-├── js/vendor/qrcode.js   QR-generator (qrcode-generator 1.4.4, MIT, Kazuhiko Arase)
+├── js/app.js             spel-logica, schermen, afstandsbediening, fragmenten
 ├── sw.js                 offline-cache (PWA)
 ├── manifest.webmanifest  PWA-gegevens voor iPhone/iPad
 ├── appinfo.json          gegevens voor de LG webOS-app

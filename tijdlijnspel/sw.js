@@ -1,10 +1,9 @@
 // Bewaart de app zelf offline. Muziekfragmenten komen altijd live van internet.
-const CACHE = "tijdlijn-v2";
+const CACHE = "tijdlijn-v3";
 const FILES = [
   "./",
   "index.html",
   "css/style.css",
-  "js/vendor/qrcode.js",
   "js/decks.js",
   "js/app.js",
   "manifest.webmanifest",

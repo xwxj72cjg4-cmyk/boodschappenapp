@@ -73,6 +73,9 @@
   // ---------- Muziekfragmenten via de iTunes Search API ----------
 
   const previewCache = new Map();
+  // Al gevonden fragmenten, zodat we ze direct (binnen dezelfde tik) kunnen afspelen.
+  // iOS laat geluid alleen starten als dat rechtstreeks op een tik gebeurt.
+  const previewReady = new Map();
 
   function normalize(s) {
     return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
@@ -97,7 +100,9 @@
           results.find((r) => normalize(r.artistName).includes(artist) && normalize(r.trackName).includes(title)) ||
           results.find((r) => normalize(r.artistName).includes(artist)) ||
           null;
-        return best ? best.previewUrl : null;
+        const url = best ? best.previewUrl : null;
+        previewReady.set(key, url);
+        return url;
       })
       .catch(() => null)
       .finally(() => clearTimeout(timer));
@@ -105,16 +110,26 @@
     return promise;
   }
 
+  function playFragment(fromTap) {
+    if (audio.getAttribute("src") !== game.preview) audio.src = game.preview;
+    audio.play().catch(() => {
+      // Automatisch starten mag soms niet (browserbeleid); dan gewoon op de knop drukken.
+      if (fromTap) {
+        game.revealedTitle = true;
+        render();
+      }
+    });
+  }
+
   function stopAudio() {
     audio.pause();
     audio.removeAttribute("src");
   }
 
-  // ---------- Spotify-links en QR-codes ----------
+  // ---------- Afspelen en Spotify-links ----------
 
   const PLAYBACK = [
-    ["fragment", "🔊 Fragment (30 sec.)", "Fragmenten komen van Apple Music en hebben internet nodig."],
-    ["spotify", "📱 Spotify-QR", "Elke muziekkaart krijgt een QR-code. Scan hem met een telefoon waarop Spotify staat. Spotify laat de titel zien, dus laat iemand anders scannen of houd het scherm weg van de speler."],
+    ["fragment", "🔊 Fragment (30 sec.)", "Het fragment speelt direct in de app zodra je een kaart pakt. Het komt van Apple Music en heeft internet nodig."],
     ["lezen", "📖 Voorlezen", "Titel en artiest staan op de kaart; iemand anders leest ze voor of zingt het nummer."],
   ];
 
@@ -122,20 +137,14 @@
     return /^(https?:\/\/open\.spotify\.com\/|spotify:track:|[A-Za-z0-9]{22}$)/.test(s || "");
   }
 
-  // Een kaart kan een eigen Spotify-link of track-ID hebben; anders zoeken we op artiest + titel.
+  // Na het onthullen kun je het hele nummer op Spotify openen. Een kaart kan een eigen
+  // Spotify-link of track-ID hebben; anders zoeken we op artiest + titel.
   function spotifyUrl(card) {
     const ref = card.spotify;
     if (/^https?:\/\//.test(ref)) return ref;
     const id = (ref.match(/^(?:spotify:track:)?([A-Za-z0-9]{22})$/) || [])[1];
     if (id) return "https://open.spotify.com/track/" + id;
     return "https://open.spotify.com/search/" + encodeURIComponent(card.sub + " " + card.title);
-  }
-
-  function qrSvg(text) {
-    const qr = window.qrcode(0, "M");
-    qr.addData(text);
-    qr.make();
-    return qr.createSvgTag({ cellSize: 4, margin: 3, scalable: true, alt: "QR-code naar Spotify" });
   }
 
   // ---------- Spelstatus ----------
@@ -145,8 +154,8 @@
     players: saved.players || ["Speler 1", "Speler 2"],
     decks: saved.decks || ["muziek"],
     target: saved.target || 10,
-    // "fragment" = 30 sec. via Apple, "spotify" = QR-code naar Spotify, "lezen" = kaart voorlezen
-    playback: saved.playback || (saved.audio === false ? "lezen" : "fragment"),
+    // "fragment" = 30 sec. via Apple, direct in de app; "lezen" = kaart voorlezen
+    playback: saved.playback === "lezen" || saved.audio === false ? "lezen" : "fragment",
   };
 
   let game = null;
@@ -162,6 +171,7 @@
     const pile = shuffle(cards);
     const players = settings.players.map((name) => ({ name, timeline: [pile.pop()], coins: 2 }));
     game = { players, pile, current: Math.floor(Math.random() * players.length), card: null, slot: 0, result: null };
+    prefetchNext();
   }
 
   function player() {
@@ -175,17 +185,26 @@
     game.preview = undefined;
     if (game.card && game.card.music && settings.playback === "fragment") {
       const card = game.card;
+      const key = card.sub + "|" + card.title;
+      if (previewReady.has(key)) {
+        game.preview = previewReady.get(key);
+        if (!game.preview) game.revealedTitle = true;
+      }
       findPreview(card).then((url) => {
-        if (game && game.card === card) {
+        if (game && game.card === card && game.preview === undefined) {
           game.preview = url;
           if (!url) game.revealedTitle = true;
           if (screen === "play") render();
         }
       });
-      // Volgende kaart alvast opzoeken zodat die direct klaarstaat.
-      const next = game.pile[game.pile.length - 1];
-      if (next && next.music) findPreview(next);
     }
+    prefetchNext();
+  }
+
+  // Volgende kaart alvast opzoeken zodat het fragment meteen klaarstaat.
+  function prefetchNext() {
+    const next = game.pile[game.pile.length - 1];
+    if (next && next.music && settings.playback === "fragment") findPreview(next);
   }
 
   // ---------- Schermen ----------
@@ -231,8 +250,8 @@
     return (
       '<div class="card ' + (opts.cls || "") + '">' +
       '<div class="card-deck">' + (deck ? deck.emoji : "") + "</div>" +
-      (opts.qr ? '<div class="qr">' + opts.qr + "</div>" : '<div class="card-year">' + (opts.hideYear ? "?" : card.year) + "</div>") +
-      (opts.qr && hidden ? "" : '<div class="card-title">' + (hidden ? "???" : esc(card.title)) + "</div>") +
+      '<div class="card-year">' + (opts.hideYear ? "?" : card.year) + "</div>" +
+      '<div class="card-title">' + (hidden ? "???" : esc(card.title)) + "</div>" +
       (card.sub ? '<div class="card-sub">' + (hidden ? "" : esc(card.sub)) + "</div>" : "") +
       "</div>"
     );
@@ -356,7 +375,7 @@
         "<h2>Eigen kaarten</h2>" +
         "<p>Maak je eigen scenario, bijvoorbeeld familiemomenten, je favoriete band of een quiz voor de klas. " +
         "Eén kaart per regel: <code>jaar; titel; extra info</code>. " +
-        "Bij nummers kun je er een Spotify-link achter zetten (in Spotify: Delen → Kopieer link); zonder link zoekt de QR-code op titel en artiest.</p>" +
+        "Bij nummers kun je er een Spotify-link achter zetten (in Spotify: Delen → Kopieer link) om na afloop het hele nummer te openen.</p>" +
         '<div data-row="name"><input class="input" id="custom-name" placeholder="Naam van de set" value="' + esc(stored.name || "") + '"></div>' +
         '<div data-row="text"><textarea class="input" id="custom-text" rows="9" placeholder="1998; Oma en opa trouwen; In Utrecht\n2005; Verhuizing naar Zwolle\n2012; Geboorte van Sam">' +
         esc(text) +
@@ -387,11 +406,7 @@
       const card = game.card;
       const timeline = sortedTimeline(p);
       let media = "";
-      if (card.music && settings.playback === "spotify") {
-        media =
-          '<p class="hint qr-hint">Scan de QR-code met je telefoon om het nummer in Spotify te openen</p>' +
-          '<a class="btn small" href="' + esc(spotifyUrl(card)) + '" target="_blank" rel="noopener">Open op dit toestel</a>';
-      } else if (card.music && settings.playback === "fragment") {
+      if (card.music && settings.playback === "fragment") {
         if (game.preview === undefined) {
           media = '<p class="hint">Fragment zoeken…</p>';
         } else if (game.preview) {
@@ -405,17 +420,10 @@
       return (
         scoreboard() +
         '<div class="play-top">' +
-        '<div class="mystery">' + cardHtml(card, {
-          hideYear: true,
-          hideTitle: !game.revealedTitle,
-          cls: "big",
-          qr: card.music && settings.playback === "spotify" ? qrSvg(spotifyUrl(card)) : "",
-        }) + "</div>" +
+        '<div class="mystery">' + cardHtml(card, { hideYear: true, hideTitle: !game.revealedTitle, cls: "big" }) + "</div>" +
         '<div class="play-actions" data-row="controls">' +
         media +
-        (!game.revealedTitle && (game.preview || settings.playback === "spotify")
-          ? '<button class="btn small" data-show-title>Toon titel</button>'
-          : "") +
+        (!game.revealedTitle && game.preview ? '<button class="btn small" data-show-title>Toon titel</button>' : "") +
         (p.coins > 0 && game.pile.length ? '<button class="btn small" data-skip>Overslaan (🪙1)</button>' : "") +
         "</div></div>" +
         '<p class="instruction"><b>' + esc(p.name) + "</b>, waar hoort deze kaart?</p>" +
@@ -559,7 +567,9 @@
     }
     if ("begin" in d) {
       drawCard();
-      return go("play");
+      go("play");
+      if (game.preview) playFragment(false);
+      return;
     }
     if (d.slot !== undefined) {
       const slot = +d.slot;
@@ -570,11 +580,7 @@
     if ("place" in d) return placeCard();
     if ("play" in d) {
       if (audio.paused) {
-        if (audio.getAttribute("src") !== game.preview) audio.src = game.preview;
-        audio.play().catch(() => {
-          game.revealedTitle = true;
-          render();
-        });
+        playFragment(true);
       } else {
         audio.pause();
       }
@@ -588,7 +594,9 @@
       player().coins--;
       stopAudio();
       drawCard();
-      return render();
+      render();
+      if (game.preview) playFragment(false);
+      return;
     }
     if ("bonus" in d) {
       player().coins++;
