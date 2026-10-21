@@ -1,0 +1,29 @@
+[
+  {
+    "deezerId": 3262675101,
+    "titel": "Anxiety",
+    "artiest": "Doechii",
+    "deezerJaar": 2025,
+    "musicbrainzJaar": 2020,
+    "mbid": "c69a34b2-bbff-4b43-a89c-b8f10220c001",
+    "reden": "jaren wijken 5 jaar af"
+  },
+  {
+    "deezerId": 3588926901,
+    "titel": "Stateside + Zara Larsson",
+    "artiest": "PinkPantheress",
+    "deezerJaar": 2025,
+    "musicbrainzJaar": null,
+    "mbid": null,
+    "reden": "niet gevonden op MusicBrainz"
+  },
+  {
+    "deezerId": 2454854845,
+    "titel": "Pink Pony Club",
+    "artiest": "Chappell Roan",
+    "deezerJaar": 2023,
+    "musicbrainzJaar": 2020,
+    "mbid": "1f79a002-85d2-424a-9b4d-a1407c8504c5",
+    "reden": "jaren wijken 3 jaar af"
+  }
+]
