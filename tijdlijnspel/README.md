@@ -45,6 +45,29 @@ zet `PER_GENRE` (standaard 150) hoger.
 Let op: Wikidata wordt door vrijwilligers bijgehouden. Een enkel jaartal kan
 afwijken, bijvoorbeeld het jaar van een heruitgave.
 
+## Nummers uit een Deezer-playlist toevoegen
+
+```bash
+node scripts/import-recent.js <playlist-id of link> [--set recent] [--naam "Recente hits"] [--marge 1] [--droog]
+```
+
+Het script (Node 18+, geen installatie nodig) haalt alle nummers uit de playlist op. Per nummer:
+
+1. **Overslaan** als het al in een kaartenset staat (`decks.js`, `muziek-db.js` of
+   `muziek-extra.js`). Er wordt vergeleken op titel en hoofdartiest, zonder toevoegingen als
+   *Remastered* of *Radio Edit*.
+2. **Jaar controleren** via [MusicBrainz](https://musicbrainz.org): het vroegste jaar van de
+   opname met precies die titel en artiest.
+3. **Toevoegen** aan `js/muziek-extra.js` (set *Recente hits*, of de naam bij `--naam`) als dat
+   jaar hooguit `--marge` jaar afwijkt van de releasedatum bij Deezer.
+4. **Ter controle** in `tools/import-controle.json` als de jaren meer afwijken of het nummer niet
+   op MusicBrainz staat. Daar staan beide jaartallen bij. Klopt een nummer toch, zet het dan met
+   het juiste jaar in `js/muziek-extra.js`.
+
+Met `--droog` zie je eerst wat er zou gebeuren, zonder iets weg te schrijven. Het script wacht
+tussen verzoeken (MusicBrainz staat 1 verzoek per seconde toe), dus 100 nummers duren ongeveer
+twee minuten. `muziek-extra.js` wordt niet door `tools/bouw-muziek.mjs` overschreven.
+
 ## Spelregels
 
 1. Iedere speler (2–8) begint met één open kaart.
@@ -170,6 +193,7 @@ tijdlijnspel/
 ├── css/style.css         opmaak (schaalt van telefoon tot 4K-tv)
 ├── js/decks.js           vaste kaartensets
 ├── js/muziek-db.js       genre-sets uit Wikidata (automatisch gemaakt)
+├── js/muziek-extra.js    nummers uit Deezer-playlists (scripts/import-recent.js)
 ├── tools/                bouwscript voor de genre-sets
 ├── js/app.js             spel-logica, schermen, afstandsbediening, fragmenten
 ├── js/feest.js           slingers, confetti en applaus bij een goed antwoord

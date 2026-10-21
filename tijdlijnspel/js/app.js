@@ -40,6 +40,7 @@
   // Genre-sets uit js/muziek-db.js (gemaakt uit Wikidata door tools/bouw-muziek.mjs).
   function genreDecks() {
     return (window.MUSIC_DB || [])
+      .concat(window.MUSIC_EXTRA || []) // imports uit Deezer-playlists (scripts/import-recent.js)
       .filter((d) => d.cards.length)
       .map((d) => Object.assign({ description: "Nummers via Wikipedia" }, d));
   }
