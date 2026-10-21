@@ -38,14 +38,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Nieuwste Apple-cache ophalen
+        # Een eerdere (gestopte) run kan na deze checkout nog resultaten hebben opgeslagen.
+        run: |
+          git fetch origin "${GITHUB_REF_NAME}"
+          git show "origin/${GITHUB_REF_NAME}:tijdlijnspel/tools/itunes-cache.json" > /tmp/remote-cache.json 2>/dev/null || echo '{}' > /tmp/remote-cache.json
+          node tijdlijnspel/tools/merge-cache.mjs /tmp/remote-cache.json
       - run: node tijdlijnspel/tools/bouw-muziek.mjs
       - name: Resultaat opslaan in de branch
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p /tmp/uit
+          cp tijdlijnspel/tools/itunes-cache.json /tmp/uit/ 2>/dev/null || true
+          git diff --quiet -- tijdlijnspel/js/muziek-db.js || cp tijdlijnspel/js/muziek-db.js /tmp/uit/
+          # Bovenop de nieuwste stand van de branch zetten en de caches samenvoegen.
+          git fetch origin "${GITHUB_REF_NAME}"
+          git checkout -f -B opslaan "origin/${GITHUB_REF_NAME}"
+          if [ -f /tmp/uit/itunes-cache.json ]; then node tijdlijnspel/tools/merge-cache.mjs /tmp/uit/itunes-cache.json; fi
+          if [ -f /tmp/uit/muziek-db.js ]; then cp /tmp/uit/muziek-db.js tijdlijnspel/js/muziek-db.js; fi
           git add tijdlijnspel/js/muziek-db.js tijdlijnspel/tools/itunes-cache.json 2>/dev/null || true
           if git diff --cached --quiet; then echo "Niets veranderd"; exit 0; fi
           git commit -m "Tijdlijn: muziekdatabase bijgewerkt uit Wikidata"
-          git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
