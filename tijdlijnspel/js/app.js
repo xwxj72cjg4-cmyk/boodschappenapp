@@ -143,8 +143,8 @@
   // ---------- Afspelen en Spotify-links ----------
 
   const PLAYBACK = [
-    ["fragment", "🔊 Fragment (30 sec.)", "Het fragment speelt direct in de app zodra je een kaart pakt. Het komt van Apple Music en heeft internet nodig."],
-    ["lezen", "📖 Voorlezen", "Titel en artiest staan op de kaart; iemand anders leest ze voor of zingt het nummer."],
+    ["fragment", "Fragment (30 sec.)", "Het fragment speelt direct in de app zodra je een kaart pakt. Het komt van Apple Music en heeft internet nodig."],
+    ["lezen", "Voorlezen", "Titel en artiest staan op de kaart; iemand anders leest ze voor of zingt het nummer."],
   ];
 
   function isSpotifyRef(s) {
@@ -230,10 +230,12 @@
   // ---------- Schermen ----------
 
   let screen = "home";
-  const backTargets = { setup: "home", rules: "home", custom: "home", turn: "quit", play: "quit", reveal: "quit", end: "home" };
+  const backTargets = { custom: "home", turn: "quit", play: "quit", reveal: "quit", end: "home" };
 
   function go(name) {
+    if (name === "setup" || name === "rules") name = "home"; // samengevoegd met het startscherm
     if (name !== "play") stopAudio();
+    quitArmed = false;
     window.Feest.stop();
     screen = name;
     render();
@@ -248,6 +250,35 @@
     if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: "nearest", inline: "center" });
   }
 
+  // ---------- Onderdelen ----------
+
+  const DISC_ICON =
+    '<svg class="disc-icon" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="21" /><circle cx="24" cy="24" r="4" />' +
+    '<path d="M24 11a13 13 0 0 1 13 13M11 24a13 13 0 0 0 13 13" /></svg>';
+  const SKIP_ICON =
+    '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l10 7-10 7z" /><path d="M19 5v14" /></svg>';
+
+  // Kaartkleur hangt af van de titel, zodat een kaart steeds dezelfde kleur houdt.
+  const CARD_COLORS = ["green", "pink", "yellow", "blue", "purple", "orange"];
+  function cardColor(card) {
+    let h = 0;
+    for (let i = 0; i < card.title.length; i++) h = (h * 31 + card.title.charCodeAt(i)) | 0;
+    return CARD_COLORS[Math.abs(h) % CARD_COLORS.length];
+  }
+
+  function topbar() {
+    const inGame = game && /^(turn|play|reveal)$/.test(screen);
+    return (
+      '<header class="topbar">' +
+      '<span class="brand">Tijd<em>lijn</em></span>' +
+      (inGame ? scoreboard() : "") +
+      (inGame
+        ? '<div data-row="topbar"><button class="link" data-quit>' + (quitArmed ? "Zeker weten? Tik nog eens" : "Stoppen") + "</button></div>"
+        : "") +
+      "</header>"
+    );
+  }
+
   function scoreboard() {
     return (
       '<ul class="scores">' +
@@ -257,23 +288,48 @@
             '<li class="' + (i === game.current ? "active" : "") + '">' +
             '<span class="name">' + esc(p.name) + "</span>" +
             '<span class="count">' + p.timeline.length + "/" + settings.target + "</span>" +
-            '<span class="coins" title="Munten">🪙' + p.coins + "</span></li>"
+            '<span class="coins" title="Tokens">◆ ' + p.coins + "</span></li>"
         )
         .join("") +
       "</ul>"
     );
   }
 
+  // Kaart in Hitster-stijl: artiest (of omschrijving) boven, groot jaartal, titel cursief onder.
   function cardHtml(card, opts) {
     opts = opts || {};
-    const deck = allDecks().find((d) => d.id === card.deck);
-    const hidden = opts.hideTitle;
+    const top = card.music ? card.sub : card.title;
+    const bottom = card.music ? card.title : card.sub;
     return (
-      '<div class="card ' + (opts.cls || "") + '">' +
-      '<div class="card-deck">' + (deck ? deck.emoji : "") + "</div>" +
-      '<div class="card-year">' + (opts.hideYear ? "?" : card.year) + "</div>" +
-      '<div class="card-title">' + (hidden ? "???" : esc(card.title)) + "</div>" +
-      (card.sub ? '<div class="card-sub">' + (hidden ? "" : esc(card.sub)) + "</div>" : "") +
+      '<div class="card card-' + cardColor(card) + " " + (opts.cls || "") + '">' +
+      (top ? '<div class="card-top">' + esc(top) + "</div>" : "") +
+      '<div class="card-year">' + card.year + "</div>" +
+      (bottom ? '<div class="card-bottom">' + esc(bottom) + "</div>" : "") +
+      "</div>"
+    );
+  }
+
+  // De te raden kaart: bij muziek een draaiende plaat met afspeelknop, anders een open kaart zonder jaar.
+  function mysteryHtml(card) {
+    if (card.music && settings.playback === "fragment" && game.preview !== null) {
+      const playing = !audio.paused;
+      return (
+        '<div class="vinyl' + (playing ? " spinning" : "") + '">' +
+        '<div class="vinyl-label">' +
+        (game.preview === undefined
+          ? '<span class="vinyl-wait" aria-label="Fragment zoeken"></span>'
+          : '<button class="vinyl-play" data-play aria-label="' + (playing ? "Pauze" : "Speel fragment") + '">' +
+            (playing ? '<span class="pause"></span>' : '<span class="play"></span>') +
+            "</button>") +
+        "</div></div>"
+      );
+    }
+    return (
+      '<div class="mystery">' +
+      (card.music ? '<div class="mystery-top">' + esc(card.sub) + "</div>" : "") +
+      '<div class="mystery-year">?</div>' +
+      '<div class="mystery-title">' + esc(card.title) + "</div>" +
+      (!card.music && card.sub ? '<div class="mystery-sub">' + esc(card.sub) + "</div>" : "") +
       "</div>"
     );
   }
@@ -286,7 +342,7 @@
         html +=
           '<button class="slot' + (i === game.slot ? " selected" : "") + '" data-slot="' + i + '" aria-label="Plaats ' +
           (i === 0 ? "vóór alles" : i === cards.length ? "na alles" : "tussen " + cards[i - 1].year + " en " + cards[i].year) +
-          '"><span>＋</span></button>';
+          '"><span>+</span></button>';
       }
       if (i < cards.length) {
         const c = cards[i];
@@ -296,20 +352,20 @@
     return html + "</div>";
   }
 
-  function deckGroup(heading, decks, row, autofocus, extra) {
+  function deckGroup(heading, decks, row, extra) {
     if (!decks.length) return "";
     return (
-      "<h3>" + heading + "</h3>" +
+      '<h3 class="field-label">' + heading + "</h3>" +
       '<div class="decks" data-row="' + row + '">' +
       (extra || "") +
       decks
         .map(
-          (d, i) =>
-            '<button class="deck' + (settings.decks.includes(d.id) ? " on" : "") + '" data-deck="' + d.id + '"' +
-            (autofocus && i === 0 ? " autofocus" : "") + ' aria-pressed="' + settings.decks.includes(d.id) + '">' +
+          (d) =>
+            '<button class="deck' + (settings.decks.includes(d.id) ? " on" : "") + '" data-deck="' + d.id + '" aria-pressed="' +
+            settings.decks.includes(d.id) + '">' +
             '<span class="deck-emoji">' + d.emoji + "</span>" +
             '<span class="deck-name">' + esc(d.name) + "</span>" +
-            '<span class="deck-desc">' + esc(d.description) + " · " + d.cards.length + " kaarten</span>" +
+            '<span class="deck-desc">' + d.cards.length + " kaarten</span>" +
             "</button>"
         )
         .join("") +
@@ -322,57 +378,27 @@
     const on = genres.every((d) => settings.decks.includes(d.id));
     const keys = new Set();
     genres.forEach((d) => d.cards.forEach((c) => keys.add(normalize(c[1]) + "|" + normalize(c[2] || ""))));
-    const count = keys.size;
     return (
-      '<button class="deck' + (on ? " on" : "") + '" data-all-genres aria-pressed="' + on + '">' +
+      '<button class="deck all' + (on ? " on" : "") + '" data-all-genres aria-pressed="' + on + '">' +
       '<span class="deck-emoji">🎶</span>' +
       '<span class="deck-name">Alles door elkaar</span>' +
-      '<span class="deck-desc">Alle genres samen · ' + count + " kaarten</span>" +
+      '<span class="deck-desc">' + keys.size + " kaarten</span>" +
       "</button>"
     );
   }
 
   const views = {
     home() {
-      return (
-        '<div class="center">' +
-        '<h1 class="logo">Tijd<span>lijn</span></h1>' +
-        '<p class="tagline">Leg de kaarten in de juiste volgorde. Wie het eerst ' + settings.target + " kaarten heeft, wint.</p>" +
-        '<div class="stack" data-row="menu">' +
-        '<button class="btn primary big" data-go="setup" autofocus>Nieuw spel</button>' +
-        '<button class="btn" data-go="rules">Spelregels</button>' +
-        '<button class="btn" data-go="custom">Eigen kaarten</button>' +
-        "</div></div>"
-      );
-    },
-
-    rules() {
-      return (
-        '<div class="panel">' +
-        "<h2>Spelregels</h2>" +
-        "<ol class='rules'>" +
-        "<li>Iedere speler begint met één open kaart op zijn of haar tijdlijn.</li>" +
-        "<li>Om de beurt krijg je een nieuwe kaart. Bij <b>Muziekhits</b> hoor je een fragment; bij andere sets zie je de gebeurtenis, maar niet het jaar.</li>" +
-        "<li>Kies waar de kaart op jouw tijdlijn hoort: ervoor, ertussen of erna.</li>" +
-        "<li>Goed? Dan mag je de kaart houden. Fout? Dan gaat hij weg.</li>" +
-        "<li>Wie als eerste het doelaantal kaarten heeft, wint.</li>" +
-        "<li><b>Munten 🪙</b>: je start met 2. Raad je bij muziek titel én artiest goed, dan krijg je er een bij. Met 1 munt mag je een kaart overslaan.</li>" +
-        "</ol>" +
-        "<h3>Bediening</h3>" +
-        "<p>Tik op een <b>＋</b> om een plek te kiezen en tik nog een keer (of op <i>Plaats hier</i>) om te bevestigen. " +
-        "Op de tv: pijltjes ◀ ▶ om een plek te kiezen, <b>OK</b> om te bevestigen, ▲ ▼ voor de knoppen en <b>Terug</b> om te stoppen.</p>" +
-        '<div class="row" data-row="actions"><button class="btn primary" data-go="home" autofocus>Terug</button></div>' +
-        "</div>"
-      );
-    },
-
-    setup() {
       const decks = allDecks();
       const genres = decks.filter((d) => d.id.startsWith("genre-"));
       return (
-        '<div class="panel">' +
-        "<h2>Nieuw spel</h2>" +
-        "<h3>Spelers</h3>" +
+        '<section class="hero">' +
+        DISC_ICON +
+        '<h1 class="logo">Tijd<em>lijn</em></h1>' +
+        '<p class="tagline">Luister naar een fragment of lees de kaart, raad wanneer het was en leg hem op de juiste plek in je tijdlijn. Wie het eerst zijn tijdlijn vol heeft, wint.</p>' +
+        "</section>" +
+        '<section class="panel">' +
+        '<h2 class="panel-title">Spelers</h2>' +
         '<div class="players">' +
         settings.players
           .map(
@@ -380,37 +406,42 @@
               '<div class="player-row" data-row="p' + i + '">' +
               '<input class="input" data-player="' + i + '" value="' + esc(name) + '" maxlength="16" aria-label="Naam speler ' + (i + 1) + '">' +
               (settings.players.length > 1
-                ? '<button class="btn icon" data-remove="' + i + '" aria-label="Verwijder speler">✕</button>'
+                ? '<button class="icon-btn" data-remove="' + i + '" aria-label="Verwijder speler">✕</button>'
                 : "") +
               "</div>"
           )
           .join("") +
         "</div>" +
         (settings.players.length < MAX_PLAYERS
-          ? '<div class="row" data-row="add"><button class="btn" data-add>+ Speler toevoegen</button></div>'
+          ? '<div data-row="add"><button class="btn ghost wide" data-add>+ Speler toevoegen</button></div>'
           : "") +
-        deckGroup("Scenario's", decks.filter((d) => !d.id.startsWith("genre-")), "decks", true) +
-        deckGroup("Muziek per genre", genres, "genres", false, allGenresButton(genres)) +
-        "<h3>Opties</h3>" +
-        '<div class="row wrap" data-row="target">' +
+        deckGroup("Muziek per genre", genres, "genres", allGenresButton(genres)) +
+        deckGroup("Andere scenario's", decks.filter((d) => !d.id.startsWith("genre-")), "decks") +
+        '<h3 class="field-label">Kaarten nodig om te winnen</h3>' +
+        '<div class="segmented" data-row="target">' +
         [5, 8, 10, 12]
-          .map((n) => '<button class="chip' + (settings.target === n ? " on" : "") + '" data-target="' + n + '">' + n + " kaarten</button>")
+          .map((n) => '<button class="seg' + (settings.target === n ? " on" : "") + '" data-target="' + n + '">' + n + "</button>")
           .join("") +
         "</div>" +
-        '<div class="row wrap" data-row="party"><button class="chip' + (settings.party ? " on" : "") + '" data-party>🎉 Feest bij goed antwoord ' +
-        (settings.party ? "aan" : "uit") + "</button></div>" +
-        "<h3>Muziek afspelen</h3>" +
-        '<div class="row wrap" data-row="playback">' +
+        '<h3 class="field-label">Muziek</h3>' +
+        '<div class="segmented" data-row="playback">' +
         PLAYBACK.map(
-          ([id, label]) => '<button class="chip' + (settings.playback === id ? " on" : "") + '" data-playback="' + id + '">' + label + "</button>"
+          ([id, label]) => '<button class="seg' + (settings.playback === id ? " on" : "") + '" data-playback="' + id + '">' + label + "</button>"
         ).join("") +
         "</div>" +
         '<p class="hint">' + PLAYBACK.find(([id]) => id === settings.playback)[2] + "</p>" +
+        '<div data-row="party"><button class="toggle' + (settings.party ? " on" : "") + '" data-party aria-pressed="' + settings.party + '">' +
+        '<span class="switch"></span>Slingers en applaus bij een goed antwoord</button></div>' +
+        '<div data-row="actions"><button class="btn primary wide big" data-start autofocus>Start het spel</button></div>' +
         '<p class="error" id="setup-error"></p>' +
-        '<div class="row" data-row="actions">' +
-        '<button class="btn" data-go="home">Terug</button>' +
-        '<button class="btn primary big" data-start>Start spel</button>' +
-        "</div></div>"
+        "</section>" +
+        '<section class="steps">' +
+        '<div class="step"><h3>1. Luister</h3><p>Druk op play en luister naar het fragment. Titel en jaar blijven verborgen.</p></div>' +
+        '<div class="step"><h3>2. Plaats</h3><p>Kies waar de kaart in je tijdlijn hoort: ervoor, ertussen of erachter.</p></div>' +
+        '<div class="step"><h3>3. Tokens</h3><p>Titel én artiest goed? Verdien een token. Met een token sla je een lastige kaart over.</p></div>' +
+        "</section>" +
+        '<p class="footnote" data-row="more">Op de tv: ◀ ▶ kiest een plek, OK bevestigt, Terug stopt. · ' +
+        '<button class="link" data-go="custom">Eigen kaarten maken</button></p>'
       );
     },
 
@@ -418,33 +449,32 @@
       const stored = load().custom || {};
       const text = (stored.cards || []).map((c) => c.filter((x, i) => i < 2 || x !== "").join("; ")).join("\n");
       return (
-        '<div class="panel">' +
-        "<h2>Eigen kaarten</h2>" +
-        "<p>Maak je eigen scenario, bijvoorbeeld familiemomenten, je favoriete band of een quiz voor de klas. " +
+        '<section class="panel">' +
+        '<h2 class="panel-title">Eigen kaarten</h2>' +
+        '<p class="hint">Maak je eigen set, bijvoorbeeld familiemomenten, je favoriete band of een quiz voor de klas. ' +
         "Eén kaart per regel: <code>jaar; titel; extra info</code>. " +
         "Bij nummers kun je er een Spotify-link achter zetten (in Spotify: Delen → Kopieer link) om na afloop het hele nummer te openen.</p>" +
         '<div data-row="name"><input class="input" id="custom-name" placeholder="Naam van de set" value="' + esc(stored.name || "") + '"></div>' +
         '<div data-row="text"><textarea class="input" id="custom-text" rows="9" placeholder="1998; Oma en opa trouwen; In Utrecht\n2005; Verhuizing naar Zwolle\n2012; Geboorte van Sam">' +
         esc(text) +
         "</textarea></div>" +
-        '<div class="row" data-row="music"><button class="chip' + (stored.music ? " on" : "") + '" data-custom-music>🎵 Dit zijn nummers (extra info = artiest)</button></div>' +
+        '<div data-row="music"><button class="toggle' + (stored.music ? " on" : "") + '" data-custom-music><span class="switch"></span>Dit zijn nummers (extra info = artiest)</button></div>' +
         '<p class="hint" id="custom-msg"></p>' +
         '<div class="row" data-row="actions">' +
-        '<button class="btn" data-go="home">Terug</button>' +
+        '<button class="btn ghost" data-go="home">Terug</button>' +
         '<button class="btn primary" data-custom-save>Opslaan</button>' +
-        "</div></div>"
+        "</div></section>"
       );
     },
 
     turn() {
       return (
-        '<div class="center">' +
-        scoreboard() +
-        '<p class="eyebrow">Aan de beurt</p>' +
-        '<h1 class="turn-name">' + esc(player().name) + "</h1>" +
-        '<p class="tagline">Nog ' + game.pile.length + " kaarten op de stapel</p>" +
-        '<div class="row" data-row="actions"><button class="btn primary big" data-begin autofocus>Pak een kaart</button></div>' +
-        "</div>"
+        topbar() +
+        '<section class="center">' +
+        '<h1 class="turn-title">' + esc(player().name) + " is aan de beurt</h1>" +
+        '<p class="tagline">Nog ' + game.pile.length + " kaarten op de stapel. Geef het toestel door.</p>" +
+        '<div data-row="actions"><button class="btn primary big" data-begin autofocus>Pak een kaart</button></div>' +
+        "</section>"
       );
     },
 
@@ -452,30 +482,35 @@
       const p = player();
       const card = game.card;
       const timeline = sortedTimeline(p);
-      let media = "";
-      if (card.music && settings.playback === "fragment") {
-        if (game.preview === undefined) {
-          media = '<p class="hint">Fragment zoeken…</p>';
-        } else if (game.preview) {
-          media =
-            '<button class="btn play" data-play>' + (audio.paused ? "▶ Speel fragment" : "⏸ Pauze") + "</button>" +
-            '<div class="eq' + (audio.paused ? "" : " on") + '"><i></i><i></i><i></i><i></i><i></i></div>';
-        } else {
-          media = '<p class="hint">Geen fragment gevonden — lees de kaart voor.</p>';
-        }
-      }
+      let question;
+      if (!card.music) question = "In welk jaar was dit?";
+      else if (game.revealedTitle) question = esc(card.sub) + " – <i>" + esc(card.title) + "</i>";
+      else question = "Welk jaar? Welk nummer? Welke artiest?";
+      const note =
+        card.music && settings.playback === "fragment" && game.preview === null
+          ? "Geen fragment gevonden. Lees de kaart voor of zing het nummer."
+          : card.music && game.preview === undefined && settings.playback === "fragment"
+            ? "Fragment zoeken…"
+            : "";
       return (
-        scoreboard() +
-        '<div class="play-top">' +
-        '<div class="mystery">' + cardHtml(card, { hideYear: true, hideTitle: !game.revealedTitle, cls: "big" }) + "</div>" +
-        '<div class="play-actions" data-row="controls">' +
-        media +
-        (!game.revealedTitle && game.preview ? '<button class="btn small" data-show-title>Toon titel</button>' : "") +
-        (p.coins > 0 && game.pile.length ? '<button class="btn small" data-skip>Overslaan (🪙1)</button>' : "") +
-        "</div></div>" +
-        '<p class="instruction"><b>' + esc(p.name) + "</b>, waar hoort deze kaart?</p>" +
+        topbar() +
+        '<section class="stage">' +
+        '<h1 class="turn-title">' + esc(p.name) + " is aan de beurt</h1>" +
+        mysteryHtml(card) +
+        '<p class="question">' + question + "</p>" +
+        (note ? '<p class="hint center-text">' + note + "</p>" : "") +
+        '<div class="actions" data-row="controls">' +
+        '<button class="btn primary big" data-place>Draai de kaart om</button>' +
+        (p.coins > 0 && game.pile.length ? '<button class="btn secondary big" data-skip>' + SKIP_ICON + "Overslaan (1 token)</button>" : "") +
+        (!game.revealedTitle && game.preview ? '<button class="btn secondary" data-show-title>Toon titel</button>' : "") +
+        "</div>" +
+        '<p class="hint center-text">Kies eerst een plek in je tijdlijn hieronder.</p>' +
+        "</section>" +
+        '<section class="timeline-section">' +
+        '<h2 class="timeline-title">Tijdlijn van ' + esc(p.name) + " <span>(" + p.timeline.length + "/" + settings.target + ")</span></h2>" +
+        '<p class="hint">Kies de plek waar de kaart hoort. Tik nog een keer om hem neer te leggen.</p>' +
         timelineHtml(timeline, { slots: true }) +
-        '<div class="row" data-row="confirm"><button class="btn primary big" data-place>Plaats hier</button></div>'
+        "</section>"
       );
     },
 
@@ -489,23 +524,22 @@
         shown.sort((a, b) => a.year - b.year);
       }
       return (
-        scoreboard() +
-        '<div class="reveal-top">' +
+        topbar() +
+        '<section class="stage">' +
+        '<h1 class="turn-title ' + (r.good ? "good" : "bad") + '">' + (r.good ? "Goed!" : "Helaas…") + "</h1>" +
         cardHtml(r.card, { cls: "big flip " + (r.good ? "good" : "bad") }) +
-        '<div class="verdict ' + (r.good ? "good" : "bad") + '">' +
-        "<h2>" + (r.good ? "Goed! 🎉" : "Helaas…") + "</h2>" +
-        "<p>" + (r.good ? esc(p.name) + " houdt de kaart." : "De kaart hoorde op een andere plek en gaat weg.") + "</p>" +
-        "</div></div>" +
-        timelineHtml(shown, { highlight: r.card, good: r.good }) +
-        '<div class="row" data-row="actions">' +
-        (r.card.music && !r.bonusAsked
-          ? '<button class="btn" data-bonus>Titel + artiest goed? +🪙</button>'
-          : "") +
-        (r.card.music
-          ? '<a class="btn" href="' + esc(spotifyUrl(r.card)) + '" target="_blank" rel="noopener">Hele nummer op Spotify</a>'
-          : "") +
+        '<p class="question">' + (r.good ? esc(p.name) + " houdt de kaart." : "De kaart hoorde op een andere plek en gaat weg.") + "</p>" +
+        '<div class="actions" data-row="actions">' +
         '<button class="btn primary big" data-next autofocus>' + (won ? "Bekijk de winnaar" : "Volgende speler") + "</button>" +
-        "</div>"
+        (r.card.music && !r.bonusAsked ? '<button class="btn secondary big" data-bonus>Titel + artiest goed? +1 token</button>' : "") +
+        (r.card.music
+          ? '<a class="btn secondary" href="' + esc(spotifyUrl(r.card)) + '" target="_blank" rel="noopener">Hele nummer op Spotify</a>'
+          : "") +
+        "</div></section>" +
+        '<section class="timeline-section">' +
+        '<h2 class="timeline-title">Tijdlijn van ' + esc(p.name) + " <span>(" + p.timeline.length + "/" + settings.target + ")</span></h2>" +
+        timelineHtml(shown, { highlight: r.card, good: r.good }) +
+        "</section>"
       );
     },
 
@@ -513,17 +547,21 @@
       const ranked = game.players.slice().sort((a, b) => b.timeline.length - a.timeline.length);
       const winner = ranked[0];
       return (
-        '<div class="center">' +
+        topbar() +
+        '<section class="center">' +
         '<p class="eyebrow">' + (game.pile.length ? "Winnaar" : "De stapel is op! Winnaar") + "</p>" +
-        '<h1 class="turn-name">🏆 ' + esc(winner.name) + "</h1>" +
+        '<h1 class="logo">' + esc(winner.name) + "</h1>" +
         '<ol class="ranking">' +
         ranked.map((p) => "<li><span>" + esc(p.name) + "</span><b>" + p.timeline.length + " kaarten</b></li>").join("") +
         "</ol>" +
-        timelineHtml(sortedTimeline(winner)) +
-        '<div class="row" data-row="actions">' +
-        '<button class="btn" data-go="home">Menu</button>' +
+        '<div class="actions" data-row="actions">' +
         '<button class="btn primary big" data-again autofocus>Nog een keer</button>' +
-        "</div></div>"
+        '<button class="btn secondary big" data-go="home">Menu</button>' +
+        "</div></section>" +
+        '<section class="timeline-section">' +
+        '<h2 class="timeline-title">Tijdlijn van ' + esc(winner.name) + "</h2>" +
+        timelineHtml(sortedTimeline(winner)) +
+        "</section>"
       );
     },
   };
@@ -557,8 +595,23 @@
     go("turn");
   }
 
+  // Stoppen in twee stappen (confirm() werkt niet overal, o.a. niet op de tv-app en in ingesloten pagina's).
+  let quitArmed = false;
+  let quitTimer = 0;
   function quit() {
-    if (confirm("Spel stoppen en terug naar het menu?")) go("home");
+    if (quitArmed) return go("home");
+    quitArmed = true;
+    const btn = app.querySelector("[data-quit]");
+    if (btn) {
+      btn.textContent = "Zeker weten? Nog een keer om te stoppen";
+      btn.focus();
+    }
+    clearTimeout(quitTimer);
+    quitTimer = setTimeout(() => {
+      quitArmed = false;
+      const b = app.querySelector("[data-quit]");
+      if (b) b.textContent = "Stoppen";
+    }, 4000);
   }
 
   app.addEventListener("click", (e) => {
@@ -567,9 +620,10 @@
     const d = el.dataset;
 
     if (d.go) {
-      if (screen === "setup") readPlayerInputs();
+      readPlayerInputs();
       return go(d.go);
     }
+    if ("quit" in d) return quit();
     if ("add" in d) {
       readPlayerInputs();
       settings.players.push("Speler " + (settings.players.length + 1));
@@ -719,10 +773,13 @@
 
   ["play", "pause", "ended"].forEach((ev) =>
     audio.addEventListener(ev, () => {
+      const vinyl = app.querySelector(".vinyl");
       const btn = app.querySelector("[data-play]");
-      const eq = app.querySelector(".eq");
-      if (btn) btn.textContent = audio.paused ? "▶ Speel fragment" : "⏸ Pauze";
-      if (eq) eq.classList.toggle("on", !audio.paused);
+      if (vinyl) vinyl.classList.toggle("spinning", !audio.paused);
+      if (btn) {
+        btn.innerHTML = audio.paused ? '<span class="play"></span>' : '<span class="pause"></span>';
+        btn.setAttribute("aria-label", audio.paused ? "Speel fragment" : "Pauze");
+      }
     })
   );
 
@@ -775,7 +832,7 @@
       const target = backTargets[screen];
       if (target === "quit") quit();
       else if (target) {
-        if (screen === "setup") readPlayerInputs();
+        readPlayerInputs();
         go(target);
       } else if (window.webOS && window.webOS.platformBack) {
         window.webOS.platformBack();

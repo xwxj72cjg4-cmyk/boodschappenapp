@@ -8,7 +8,7 @@
   "icon": "icons/icon-80.png",
   "largeIcon": "icons/icon-130.png",
   "splashBackground": "icons/splash.png",
-  "bgColor": "#1b1440",
+  "bgColor": "#0e0c1b",
   "resolution": "1920x1080",
   "disableBackHistoryAPI": true
 }
