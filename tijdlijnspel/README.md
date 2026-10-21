@@ -24,7 +24,8 @@ per kaart, `[jaar, "titel", "extra info"]`.
 ## Muziek per genre (via Wikipedia)
 
 Naast de vaste sets zijn er genre-sets: Pop, Rock, Hiphop, Dance & elektronisch,
-Disco & funk, R&B & soul, Metal, Country, Jazz en Nederlandstalig. Die komen uit
+Disco & funk, R&B & soul, Metal, Country, Jazz en Nederlandstalig. Met
+**🎶 Alles door elkaar** zet je alle genres in één keer aan. Die komen uit
 [Wikidata](https://www.wikidata.org), de database achter Wikipedia:
 
 - per genre (inclusief subgenres) de bekendste nummers, gemeten aan het aantal

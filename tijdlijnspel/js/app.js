@@ -116,7 +116,10 @@
         return url;
       })
       .catch(() => null)
-      .finally(() => clearTimeout(timer));
+      .then((url) => {
+        clearTimeout(timer);
+        return url;
+      });
     previewCache.set(key, promise);
     return promise;
   }
@@ -291,11 +294,12 @@
     return html + "</div>";
   }
 
-  function deckGroup(heading, decks, row, autofocus) {
+  function deckGroup(heading, decks, row, autofocus, extra) {
     if (!decks.length) return "";
     return (
       "<h3>" + heading + "</h3>" +
       '<div class="decks" data-row="' + row + '">' +
+      (extra || "") +
       decks
         .map(
           (d, i) =>
@@ -308,6 +312,21 @@
         )
         .join("") +
       "</div>"
+    );
+  }
+
+  // Eén knop die alle genres tegelijk aan- of uitzet.
+  function allGenresButton(genres) {
+    const on = genres.every((d) => settings.decks.includes(d.id));
+    const keys = new Set();
+    genres.forEach((d) => d.cards.forEach((c) => keys.add(normalize(c[1]) + "|" + normalize(c[2] || ""))));
+    const count = keys.size;
+    return (
+      '<button class="deck' + (on ? " on" : "") + '" data-all-genres aria-pressed="' + on + '">' +
+      '<span class="deck-emoji">🎶</span>' +
+      '<span class="deck-name">Alles door elkaar</span>' +
+      '<span class="deck-desc">Alle genres samen · ' + count + " kaarten</span>" +
+      "</button>"
     );
   }
 
@@ -347,6 +366,7 @@
 
     setup() {
       const decks = allDecks();
+      const genres = decks.filter((d) => d.id.startsWith("genre-"));
       return (
         '<div class="panel">' +
         "<h2>Nieuw spel</h2>" +
@@ -368,7 +388,7 @@
           ? '<div class="row" data-row="add"><button class="btn" data-add>+ Speler toevoegen</button></div>'
           : "") +
         deckGroup("Scenario's", decks.filter((d) => !d.id.startsWith("genre-")), "decks", true) +
-        deckGroup("Muziek per genre", decks.filter((d) => d.id.startsWith("genre-")), "genres") +
+        deckGroup("Muziek per genre", genres, "genres", false, allGenresButton(genres)) +
         "<h3>Opties</h3>" +
         '<div class="row wrap" data-row="target">' +
         [5, 8, 10, 12]
@@ -561,6 +581,14 @@
       else settings.decks.push(d.deck);
       render();
       return app.querySelector('[data-deck="' + d.deck + '"]').focus();
+    }
+    if ("allGenres" in d) {
+      readPlayerInputs();
+      const ids = allDecks().filter((x) => x.id.startsWith("genre-")).map((x) => x.id);
+      const allOn = ids.every((id) => settings.decks.includes(id));
+      settings.decks = settings.decks.filter((id) => !ids.includes(id)).concat(allOn ? [] : ids);
+      render();
+      return app.querySelector("[data-all-genres]").focus();
     }
     if (d.target) {
       readPlayerInputs();
