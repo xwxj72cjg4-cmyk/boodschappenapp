@@ -1,0 +1,14 @@
+{
+  "id": "nl.tijdlijn.spel",
+  "version": "1.0.0",
+  "vendor": "Tijdlijn",
+  "type": "web",
+  "main": "index.html",
+  "title": "Tijdlijn",
+  "icon": "icons/icon-80.png",
+  "largeIcon": "icons/icon-130.png",
+  "splashBackground": "icons/splash.png",
+  "bgColor": "#0e0c1b",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true
+}
