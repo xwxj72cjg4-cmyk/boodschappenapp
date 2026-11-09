@@ -1,0 +1,12 @@
+# Netlify-instellingen voor het spel Tijdlijn.
+# Netlify publiceert de branch "tijdlijn-site": daarin staat alleen de inhoud van deze map
+# (bijgewerkt door .github/workflows/tijdlijn-site.yml), dus zonder de Next.js-boodschappenapp.
+[build]
+  publish = "."   # de map zelf
+  command = ""    # geen build-stap nodig
+
+# De service worker altijd vers ophalen, zodat updates direct doorkomen.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
