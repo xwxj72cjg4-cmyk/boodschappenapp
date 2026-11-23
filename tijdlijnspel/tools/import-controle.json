@@ -232,5 +232,86 @@
     "musicbrainzJaar": 1981,
     "mbid": "2e00e54b-c90d-4850-bd2f-c5659b8ecfe4",
     "reden": "jaren wijken 2 jaar af"
+  },
+  {
+    "deezerId": 4239727282,
+    "titel": "You’re Making Me Nervous",
+    "artiest": "KC Bruner",
+    "deezerJaar": 2026,
+    "musicbrainzJaar": null,
+    "mbid": null,
+    "reden": "niet gevonden op MusicBrainz"
+  },
+  {
+    "deezerId": 104271104,
+    "titel": "Christmas Time Is Here",
+    "artiest": "Vince Guaraldi Trio",
+    "deezerJaar": 2015,
+    "musicbrainzJaar": 2002,
+    "mbid": "fc1864ce-340a-43ec-87d0-781015e9d50d",
+    "reden": "jaren wijken 13 jaar af"
+  },
+  {
+    "deezerId": 4394711721,
+    "titel": "Ruthless",
+    "artiest": "Kacey Musgraves",
+    "deezerJaar": 2026,
+    "musicbrainzJaar": 2024,
+    "mbid": "7c21d997-e5b5-414c-ab76-0e35e00f0bb3",
+    "reden": "jaren wijken 2 jaar af"
+  },
+  {
+    "deezerId": 593706102,
+    "titel": "Rockin' Around The Christmas Tree",
+    "artiest": "Brenda Lee",
+    "deezerJaar": 2018,
+    "musicbrainzJaar": 1958,
+    "mbid": "8651cca6-578a-4e47-85c0-5d8d2a2566be",
+    "reden": "jaren wijken 60 jaar af"
+  },
+  {
+    "deezerId": 4391168471,
+    "titel": "Someone to Hold (from the Netflix Film \"Steps\")",
+    "artiest": "JENNIE",
+    "deezerJaar": 2026,
+    "musicbrainzJaar": null,
+    "mbid": null,
+    "reden": "niet gevonden op MusicBrainz"
+  },
+  {
+    "deezerId": 4184904512,
+    "titel": "Mama Weer All Crazee Now",
+    "artiest": "Slade",
+    "deezerJaar": 2011,
+    "musicbrainzJaar": 1972,
+    "mbid": "3f086c3d-f883-4290-a65a-f16d5f0f0a77",
+    "reden": "jaren wijken 39 jaar af"
+  },
+  {
+    "deezerId": 407645032,
+    "titel": "Plush",
+    "artiest": "Stone Temple Pilots",
+    "deezerJaar": 2017,
+    "musicbrainzJaar": 1993,
+    "mbid": "898de8fe-52f3-4987-85ed-d27e00d8f6bc",
+    "reden": "jaren wijken 24 jaar af"
+  },
+  {
+    "deezerId": 110148756,
+    "titel": "Carol of the Bells (From \"Home Alone\" Soundtrack)",
+    "artiest": "John Williams",
+    "deezerJaar": 2015,
+    "musicbrainzJaar": 2018,
+    "mbid": "c7da4c7e-ffbb-44f7-a12e-4a1b55d6b6e0",
+    "reden": "jaren wijken 3 jaar af"
+  },
+  {
+    "deezerId": 15171018,
+    "titel": "Mele Kalikimaka (Merry Christmas)",
+    "artiest": "The Andrews Sisters",
+    "deezerJaar": 2011,
+    "musicbrainzJaar": 2004,
+    "mbid": "c2ac12e2-8695-41d0-904d-bb3a15d42c82",
+    "reden": "jaren wijken 7 jaar af"
   }
 ]
