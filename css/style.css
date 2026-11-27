@@ -1,0 +1,322 @@
+/* Donker nachtclubpaars met één felroze accent; zware, smalle koppen (Archivo) en rustige tekst (DM Sans).
+   Indeling: kopbalk, gecentreerd podium (plaat of kaart + knoppen), daaronder de tijdlijn. */
+:root {
+  --bg: #0e0c1b;
+  --surface: #17142a;
+  --surface-2: #221e38;
+  --line: #2f2a49;
+  --text: #f4f2fa;
+  --muted: #a6a1bf;
+  --pink: #ec4899;
+  --pink-deep: #be2f7f;
+  --good: #4ade80;
+  --bad: #f87171;
+  --ink: #0e0c1b;
+  --c-green: #7ed987;
+  --c-pink: #f9a8d4;
+  --c-yellow: #fcd770;
+  --c-blue: #8fd3fb;
+  --c-purple: #c4b5fd;
+  --c-orange: #fdb77a;
+  --font-display: "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --focus: 0 0 0 0.2rem var(--bg), 0 0 0 0.38rem var(--pink);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html { font-size: clamp(15px, 0.85vw + 0.85vh, 38px); -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  line-height: 1.45;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+.screen {
+  max-width: 68rem;
+  margin: 0 auto;
+  padding-block: max(1.2rem, env(safe-area-inset-top)) max(1.6rem, env(safe-area-inset-bottom));
+  padding-left: max(16px, 1.4rem, env(safe-area-inset-left));
+  padding-right: max(16px, 1.4rem, env(safe-area-inset-right));
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+}
+.screen-play, .screen-reveal, .screen-end, .screen-turn { max-width: none; }
+
+h1, h2, h3 { margin: 0; line-height: 1.1; text-wrap: balance; }
+p { margin: 0; }
+code { background: var(--surface-2); padding: 0.05rem 0.35rem; border-radius: 0.3rem; }
+em { font-style: normal; color: var(--pink); }
+
+/* ---------- Kopbalk ---------- */
+
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem 1rem; flex-wrap: wrap; }
+@media (max-width: 720px) {
+  /* Smal scherm: logo en Stoppen op één regel, scores eronder. */
+  .topbar .scores { order: 3; width: 100%; justify-content: flex-start; }
+}
+.brand { font-family: var(--font-display); font-weight: 800; font-size: 1.45rem; letter-spacing: -0.02em; }
+
+.scores { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
+.scores li {
+  display: flex; gap: 0.45rem; align-items: center;
+  padding: 0.3rem 0.8rem; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--line); font-size: 0.85rem;
+}
+.scores li.active { border-color: var(--pink); }
+.scores .name { font-weight: 700; }
+.scores .count { font-variant-numeric: tabular-nums; }
+.scores .coins { color: var(--pink); font-variant-numeric: tabular-nums; }
+
+/* ---------- Startscherm ---------- */
+
+.hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1rem; padding-top: 1.5rem; }
+.disc-icon { width: 3.6rem; height: 3.6rem; fill: none; stroke: var(--pink); stroke-width: 3.2; stroke-linecap: round; }
+.logo {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(3rem, 9vw, 6.4rem);
+  letter-spacing: -0.045em;
+  line-height: 0.95;
+}
+.tagline { color: var(--muted); font-size: 1.12rem; max-width: 40rem; }
+.eyebrow { color: var(--pink); text-transform: uppercase; letter-spacing: 0.14em; font-weight: 700; font-size: 0.85rem; }
+
+.panel {
+  width: min(100%, 40rem);
+  margin: 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 1.4rem;
+  padding: 1.8rem 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.panel-title { font-size: 1.4rem; font-weight: 700; }
+.field-label { font-size: 1rem; font-weight: 600; margin-top: 0.8rem; }
+
+.players { display: flex; flex-direction: column; gap: 0.6rem; }
+.player-row { display: flex; gap: 0.5rem; align-items: center; }
+
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 1.2rem; padding: 1.3rem 1.4rem; }
+.step h3 { font-size: 1.15rem; margin-bottom: 0.5rem; }
+.step p { color: var(--muted); }
+.footnote { text-align: center; color: var(--muted); font-size: 0.9rem; }
+
+/* ---------- Knoppen en velden ---------- */
+
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus, a:focus { outline: none; }
+button:focus-visible, a:focus-visible, .input:focus-visible { box-shadow: var(--focus); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.6rem;
+  border: 1px solid transparent; border-radius: 0.9rem;
+  padding: 0.8rem 1.4rem; font-weight: 700; font-size: 1rem;
+  text-decoration: none; color: var(--text);
+  transition: transform 0.12s, background 0.15s, filter 0.15s;
+}
+.btn:active { transform: scale(0.98); }
+.btn.big { padding: 1rem 2rem; font-size: 1.15rem; }
+.btn.wide { width: 100%; }
+.btn.primary { background: var(--pink); color: var(--ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.secondary { background: var(--surface-2); border-color: var(--line); }
+.btn.ghost { background: var(--bg); border-color: var(--line); font-weight: 600; }
+.icon { width: 1.2em; height: 1.2em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+
+.link { background: none; border: 0; padding: 0.3rem 0.2rem; color: var(--text); font-weight: 600; border-radius: 0.4rem; }
+.link:hover { color: var(--pink); }
+.footnote .link { color: var(--pink); }
+
+.icon-btn { background: none; border: 0; font-size: 1.15rem; padding: 0.5rem 0.7rem; border-radius: 0.6rem; }
+
+.input {
+  width: 100%; font: inherit; font-size: 1.05rem; color: var(--text);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem;
+  padding: 0.8rem 1rem; outline: none;
+}
+.input:focus { border-color: var(--pink); }
+textarea.input { resize: vertical; line-height: 1.5; }
+
+.segmented { display: flex; gap: 0.3rem; padding: 0.3rem; background: var(--bg); border: 1px solid var(--line); border-radius: 0.9rem; }
+.seg { flex: 1; border: 0; background: none; padding: 0.6rem 0.4rem; border-radius: 0.65rem; font-weight: 600; color: var(--muted); }
+.seg.on { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--pink); }
+
+.toggle { display: flex; align-items: center; gap: 0.8rem; background: none; border: 0; padding: 0.4rem 0; text-align: left; border-radius: 0.6rem; }
+.switch { flex: 0 0 auto; width: 2.6rem; height: 1.5rem; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); position: relative; transition: background 0.15s; }
+.switch::after { content: ""; position: absolute; top: 0.16rem; left: 0.16rem; width: 1.1rem; height: 1.1rem; border-radius: 50%; background: var(--muted); transition: transform 0.15s, background 0.15s; }
+.toggle.on .switch { background: var(--pink-deep); border-color: var(--pink); }
+.toggle.on .switch::after { transform: translateX(1.1rem); background: var(--text); }
+
+.decks { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 10.5rem), 1fr)); gap: 0.5rem; }
+.deck {
+  display: grid; grid-template-columns: auto 1fr; column-gap: 0.6rem; align-items: center; text-align: left;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 0.9rem; padding: 0.6rem 0.75rem;
+  color: var(--muted);
+}
+.deck-emoji { grid-row: span 2; font-size: 1.4rem; filter: grayscale(1); opacity: 0.6; }
+.deck-name { font-weight: 700; font-size: 0.95rem; line-height: 1.2; overflow-wrap: anywhere; hyphens: auto; min-width: 0; }
+.deck-desc { font-size: 0.78rem; }
+.deck.on { border-color: var(--pink); background: var(--surface-2); color: var(--text); }
+.deck.on .deck-emoji { filter: none; opacity: 1; }
+.deck.all { grid-column: 1 / -1; }
+
+.hint { color: var(--muted); font-size: 0.92rem; }
+.center-text { text-align: center; }
+.error { color: var(--bad); font-weight: 600; min-height: 1.2em; text-align: center; }
+.row { display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; }
+
+/* ---------- Beurt en speelveld ---------- */
+
+.center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.4rem; text-align: center; }
+.stage { display: flex; flex-direction: column; align-items: center; gap: 1.4rem; text-align: center; }
+.turn-title { font-family: var(--font-display); font-weight: 900; font-size: clamp(2.2rem, 5vw, 4rem); letter-spacing: -0.035em; }
+.turn-title.good { color: var(--good); }
+.turn-title.bad { color: var(--bad); }
+.question { color: var(--muted); font-size: 1.25rem; }
+.question i { color: var(--text); }
+.actions { display: flex; gap: 0.9rem; flex-wrap: wrap; justify-content: center; }
+
+/* De plaat: groeven met herhaalde radiale verlopen, roze label met witte afspeelknop. */
+.vinyl {
+  width: min(70vw, 15rem); aspect-ratio: 1; max-width: 100%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 37%, rgba(255, 255, 255, 0.03) 37.5%, transparent 38%),
+    repeating-radial-gradient(circle, #1d1934 0 1.5px, #0b0916 1.5px 4px);
+  border: 3px solid var(--line);
+  box-shadow: 0 1.4rem 3rem rgba(0, 0, 0, 0.55), inset 0 0 0 0.6rem #100d1f;
+  display: grid; place-items: center;
+}
+.vinyl.spinning { animation: spin 2.4s linear infinite; }
+.vinyl.spinning .vinyl-play { animation: spin 2.4s linear infinite reverse; } /* knop blijft rechtop */
+@keyframes spin { to { transform: rotate(360deg); } }
+.vinyl-label {
+  width: 38%; aspect-ratio: 1; border-radius: 50%;
+  background: var(--pink); display: grid; place-items: center;
+  box-shadow: 0 0 0 0.3rem rgba(236, 72, 153, 0.18);
+}
+.vinyl-play {
+  width: 74%; aspect-ratio: 1; border-radius: 50%; border: 0;
+  background: var(--text); display: grid; place-items: center; padding: 0;
+}
+.vinyl-play .play {
+  width: 0; height: 0; margin-left: 12%;
+  border-top: 0.75rem solid transparent; border-bottom: 0.75rem solid transparent; border-left: 1.15rem solid var(--ink);
+}
+.vinyl-play .pause { width: 1.1rem; height: 1.3rem; border-left: 0.38rem solid var(--ink); border-right: 0.38rem solid var(--ink); }
+.vinyl-wait { width: 40%; aspect-ratio: 1; border-radius: 50%; border: 0.25rem solid rgba(255, 255, 255, 0.35); border-top-color: var(--text); animation: spin 0.9s linear infinite; }
+
+.mystery {
+  width: min(100%, 18rem); min-height: 13rem; padding: 1.4rem;
+  border-radius: 1.3rem; background: var(--surface); border: 2px dashed var(--pink);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.35rem;
+}
+.mystery-top { font-size: 0.95rem; }
+.mystery-year { font-family: var(--font-display); font-weight: 900; font-size: 4rem; line-height: 1; color: var(--pink); }
+.mystery-title { font-weight: 700; font-size: 1.2rem; overflow-wrap: anywhere; hyphens: auto; }
+.mystery-sub { color: var(--muted); font-style: italic; }
+
+/* ---------- Kaarten ---------- */
+
+.card {
+  color: var(--ink); border-radius: 1.1rem; padding: 1rem 0.8rem; text-align: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.3rem;
+  background: var(--c-green);
+}
+.card-green { background: var(--c-green); }
+.card-pink { background: var(--c-pink); }
+.card-yellow { background: var(--c-yellow); }
+.card-blue { background: var(--c-blue); }
+.card-purple { background: var(--c-purple); }
+.card-orange { background: var(--c-orange); }
+.card-top { font-size: 0.85rem; font-weight: 500; line-height: 1.2; }
+.card-year { font-family: var(--font-display); font-weight: 900; font-size: 2.6rem; letter-spacing: -0.03em; line-height: 1; }
+.card-bottom { font-style: italic; font-size: 0.85rem; line-height: 1.25; overflow-wrap: anywhere; hyphens: auto; }
+
+.card.big { width: min(100%, 17rem); min-height: 13rem; padding: 1.6rem 1.2rem; }
+.card.big .card-year { font-size: 4.4rem; }
+.card.big .card-top, .card.big .card-bottom { font-size: 1.1rem; }
+.card.big.good { box-shadow: 0 0 0 0.3rem var(--bg), 0 0 0 0.55rem var(--good); }
+.card.big.bad { box-shadow: 0 0 0 0.3rem var(--bg), 0 0 0 0.55rem var(--bad); }
+
+.card.mini { flex: 0 0 8.2rem; min-height: 8.2rem; }
+.card.mini .card-top, .card.mini .card-bottom { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.card.highlight.good { box-shadow: 0 0 0 0.2rem var(--bg), 0 0 0 0.4rem var(--good); }
+.card.highlight.bad { outline: 0.22rem dashed var(--bad); outline-offset: 0.2rem; filter: saturate(0.4) brightness(0.8); }
+
+.flip { animation: flip 0.6s ease-out; }
+@keyframes flip { from { transform: perspective(40rem) rotateY(90deg); } to { transform: perspective(40rem) rotateY(0); } }
+
+/* ---------- Tijdlijn ---------- */
+
+.timeline-section { display: flex; flex-direction: column; gap: 0.4rem; min-width: 0; }
+.timeline-title { font-size: 1.3rem; font-weight: 700; }
+.timeline-title span { color: var(--muted); }
+
+.timeline {
+  display: flex; align-items: stretch; gap: 0.7rem;
+  overflow-x: auto; padding: 0.8rem 0.2rem 1rem;
+  scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch;
+}
+.timeline > * { scroll-snap-align: center; }
+
+.slot {
+  flex: 0 0 2.8rem; min-height: 8.2rem;
+  border-radius: 1rem; border: 2px dashed var(--line); background: transparent;
+  color: var(--muted); font-size: 1.6rem; font-weight: 300;
+  transition: flex-basis 0.15s, background 0.15s, border-color 0.15s;
+}
+.slot.selected { flex-basis: 6rem; border: 2px solid var(--pink); background: rgba(236, 72, 153, 0.12); color: var(--pink); }
+
+.ranking { list-style: none; padding: 0; margin: 0; width: min(100%, 24rem); display: flex; flex-direction: column; gap: 0.4rem; }
+.ranking li { display: flex; justify-content: space-between; padding: 0.7rem 1.1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; }
+.ranking li:first-child { border-color: var(--pink); color: var(--pink); }
+
+/* ---------- Feest ---------- */
+
+.feest { position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: hidden; }
+.feest canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.bunting {
+  position: absolute;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  height: 9rem;
+  animation: bunting-drop 0.7s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+}
+.bunting-rope { position: absolute; top: 0; left: 0; width: 100%; overflow: visible; }
+.bunting-rope path { fill: none; stroke: rgba(255, 255, 255, 0.7); stroke-width: 2; }
+.bunting i {
+  position: absolute;
+  width: clamp(1.6rem, 3.2vw, 3.4rem);
+  height: clamp(2rem, 4vw, 4.2rem);
+  margin-left: calc(clamp(1.6rem, 3.2vw, 3.4rem) / -2);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  transform-origin: 50% 0;
+  transform: rotate(var(--r));
+  animation: flag-wave 1.4s ease-in-out infinite alternate;
+}
+@keyframes bunting-drop { from { transform: translateY(-110%); } to { transform: translateY(0); } }
+@keyframes flag-wave {
+  from { transform: rotate(calc(var(--r) - 6deg)); }
+  to { transform: rotate(calc(var(--r) + 6deg)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
