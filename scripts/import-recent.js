@@ -2,7 +2,8 @@
 // Importeert nummers uit een Deezer-playlist als Tijdlijn-kaartjes.
 //
 //   node scripts/import-recent.js <playlist-id> [--set recent] [--naam "Recente hits"] [--marge 1] [--droog]
-//   node scripts/import-recent.js chart   (de actuele Deezer-top-100, geen playlist of account nodig)
+//   node scripts/import-recent.js top-nl  (Deezer "Top Netherlands"; ook top-be en top-wereld)
+//   node scripts/import-recent.js chart   (Deezer-top-100 van het land waar het script draait)
 //
 // Per nummer:
 //   1. titel, artiest en releasedatum komen van Deezer;
@@ -30,6 +31,9 @@ const FILES = {
 const UA = "TijdlijnSpel/1.0 (https://github.com/xwxj72cjg4-cmyk/boodschappenapp)";
 const THIS_YEAR = new Date().getFullYear();
 
+// Officiële Deezer-hitlijsten, op naam gezocht zodat geen ID nodig is.
+const TOP_LISTS = { "top-nl": "Top Netherlands", "top-be": "Top Belgium", "top-wereld": "Top Worldwide" };
+
 // ---------- Opties ----------
 
 function parseArgs(argv) {
@@ -46,7 +50,7 @@ function parseArgs(argv) {
   }
   // Ook een volledige link mag: https://www.deezer.com/nl/playlist/1234567. "chart" = Deezer-top-100.
   const m = String(rest[0] || "").match(/(\d{3,})\s*$/) || String(rest[0] || "").match(/playlist\/(\d+)/);
-  opts.playlist = rest[0] === "chart" ? "chart" : m ? m[1] : null;
+  opts.playlist = rest[0] === "chart" || TOP_LISTS[rest[0]] ? rest[0] : m ? m[1] : null;
   if (!/^[a-z0-9-]+$/.test(opts.set) || Number.isNaN(opts.marge)) opts.playlist = null;
   return opts;
 }
@@ -79,7 +83,8 @@ function cardKey(title, artist) {
 }
 
 async function getJson(url, label) {
-  for (let attempt = 1; attempt <= 4; attempt++) {
+  const attempts = 6;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
     let res;
     try {
       res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" } });
@@ -99,9 +104,11 @@ async function getJson(url, label) {
     const status = res ? res.status : "geen verbinding";
     if (res && res.status === 404) throw new Error(`${label}: niet gevonden (404)`);
     console.warn(`  ${label} gaf ${status}, poging ${attempt}`);
-    await sleep(3000 * attempt);
+    // Bij "te druk" (503/429) de opgegeven wachttijd aanhouden, anders steeds langer wachten (3, 6, 12 … s).
+    const retryAfter = res && Number(res.headers && res.headers.get && res.headers.get("retry-after"));
+    await sleep(retryAfter > 0 ? retryAfter * 1000 : Math.min(60000, 3000 * 2 ** (attempt - 1)));
   }
-  throw new Error(`${label}: mislukt na 4 pogingen`);
+  throw new Error(`${label}: mislukt na ${attempts} pogingen`);
 }
 
 // ---------- Bestaande kaartjes ----------
@@ -127,6 +134,16 @@ function existingKeys() {
 // ---------- Deezer ----------
 
 async function playlistTracks(id) {
+  if (TOP_LISTS[id]) {
+    const name = TOP_LISTS[id];
+    const found = await getJson("https://api.deezer.com/search/playlist?q=" + encodeURIComponent(name), "Deezer-zoeken");
+    const lists = found.data || [];
+    const pick =
+      lists.find((p) => p.title === name && p.user && /deezer/i.test(p.user.name)) || lists.find((p) => p.title === name);
+    if (!pick) throw new Error(`Deezer-hitlijst "${name}" niet gevonden`);
+    console.log(`"${name}" gevonden: playlist ${pick.id}`);
+    return playlistTracks(String(pick.id));
+  }
   if (id === "chart") {
     const chart = await getJson("https://api.deezer.com/chart/0/tracks?limit=100", "Deezer-top-100");
     return { title: "Deezer-top-100", tracks: chart.data || [] };
@@ -159,7 +176,7 @@ async function musicbrainzYear(title, artist) {
   const q = `recording:"${esc(cleanTitle(title))}" AND artist:"${esc(mainArtist(artist))}"`;
   const url = "https://musicbrainz.org/ws/2/recording?fmt=json&limit=25&query=" + encodeURIComponent(q);
   const data = await getJson(url, "MusicBrainz");
-  await sleep(1100);
+  await sleep(1500); // MusicBrainz: hooguit 1 verzoek per seconde, met wat marge
   const wantTitle = normalize(cleanTitle(title));
   const wantArtist = normalize(mainArtist(artist));
   let best = null;
@@ -199,10 +216,11 @@ function writeExtra(newCards, opts) {
   );
 }
 
-function writeReview(items) {
+// Nieuwe beoordelingen vervangen oude voor hetzelfde nummer; toegevoegde nummers gaan van de lijst af.
+function writeReview(items, addedIds) {
   const current = fs.existsSync(FILES.review) ? JSON.parse(fs.readFileSync(FILES.review, "utf8")) : [];
-  const seen = new Set(current.map((i) => i.deezerId));
-  const merged = current.concat(items.filter((i) => !seen.has(i.deezerId)));
+  const drop = new Set(items.map((i) => i.deezerId).concat(addedIds));
+  const merged = current.filter((i) => !drop.has(i.deezerId)).concat(items);
   fs.writeFileSync(FILES.review, JSON.stringify(merged, null, 2) + "\n");
   return merged.length;
 }
@@ -212,7 +230,7 @@ function writeReview(items) {
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (!opts.playlist) {
-    console.error('Gebruik: node scripts/import-recent.js <playlist-id, link of "chart"> [--set recent] [--naam "Recente hits"] [--marge 1] [--droog]');
+    console.error('Gebruik: node scripts/import-recent.js <playlist-id, link, top-nl, top-be, top-wereld of chart> [--set recent] [--naam "Recente hits"] [--marge 1] [--droog]');
     process.exit(1);
   }
 
@@ -221,37 +239,55 @@ async function main() {
   console.log(`Playlist "${title}": ${tracks.length} nummers, ${known.size} nummers al in de kaartensets.`);
 
   const added = [];
+  const addedIds = [];
   const review = [];
   let skipped = 0;
-  for (const t of tracks) {
-    const songTitle = cleanTitle(t.title_short || t.title);
-    const artist = t.artist && t.artist.name;
-    if (!songTitle || !artist) continue;
-    const key = cardKey(songTitle, artist);
-    if (known.has(key)) {
-      skipped++;
-      continue;
+  try {
+    for (const t of tracks) {
+      const songTitle = cleanTitle(t.title_short || t.title);
+      const artist = t.artist && t.artist.name;
+      if (!songTitle || !artist) continue;
+      const key = cardKey(songTitle, artist);
+      if (known.has(key)) {
+        skipped++;
+        continue;
+      }
+      known.add(key); // ook dubbelen binnen de playlist overslaan
+
+      // Lukt een opzoeking niet, dan gaat het nummer naar de controlelijst; de rest gaat gewoon door.
+      let dz = null;
+      let mb = null;
+      let failure = null;
+      try {
+        dz = await deezerYear(t.id);
+        mb = await musicbrainzYear(songTitle, artist);
+      } catch (e) {
+        failure = e.message;
+      }
+      const base = { deezerId: t.id, titel: songTitle, artiest: artist, deezerJaar: dz, musicbrainzJaar: mb ? mb.year : null, mbid: mb ? mb.mbid : null };
+
+      let reason = null;
+      if (failure) reason = "opzoeken mislukt (" + failure + "); volgende run probeert het opnieuw";
+      else if (!mb) reason = "niet gevonden op MusicBrainz";
+      else if (mb.year > THIS_YEAR) reason = "jaar ligt in de toekomst";
+      else if (dz && Math.abs(dz - mb.year) > opts.marge) reason = `jaren wijken ${Math.abs(dz - mb.year)} jaar af`;
+
+      if (reason) {
+        review.push(Object.assign(base, { reden: reason }));
+        console.log(`  ?  ${artist} – ${songTitle}: ${reason} (Deezer ${dz || "–"}, MusicBrainz ${mb ? mb.year : "–"})`);
+      } else {
+        added.push([mb.year, songTitle, artist, "", 0]);
+        addedIds.push(t.id);
+        console.log(`  +  ${mb.year}  ${artist} – ${songTitle}`);
+      }
     }
-    known.add(key); // ook dubbelen binnen de playlist overslaan
-
-    const dz = await deezerYear(t.id);
-    const mb = await musicbrainzYear(songTitle, artist);
-    const base = { deezerId: t.id, titel: songTitle, artiest: artist, deezerJaar: dz, musicbrainzJaar: mb ? mb.year : null, mbid: mb ? mb.mbid : null };
-
-    let reason = null;
-    if (!mb) reason = "niet gevonden op MusicBrainz";
-    else if (mb.year > THIS_YEAR) reason = "jaar ligt in de toekomst";
-    else if (dz && Math.abs(dz - mb.year) > opts.marge) reason = `jaren wijken ${Math.abs(dz - mb.year)} jaar af`;
-
-    if (reason) {
-      review.push(Object.assign(base, { reden: reason }));
-      console.log(`  ?  ${artist} – ${songTitle}: ${reason} (Deezer ${dz || "–"}, MusicBrainz ${mb ? mb.year : "–"})`);
-    } else {
-      added.push([mb.year, songTitle, artist, "", 0]);
-      console.log(`  +  ${mb.year}  ${artist} – ${songTitle}`);
-    }
+  } finally {
+    // Ook na een onverwachte fout opslaan wat er al gevonden is.
+    save(added, addedIds, review, skipped, opts);
   }
+}
 
+function save(added, addedIds, review, skipped, opts) {
   console.log(`\nNieuw: ${added.length} · al aanwezig: ${skipped} · ter controle: ${review.length}`);
   if (opts.droog) {
     console.log("Droog: er is niets weggeschreven.");
@@ -261,8 +297,8 @@ async function main() {
     writeExtra(added, opts);
     console.log(`Toegevoegd aan ${path.relative(process.cwd(), FILES.extra)} (set "${opts.naam}").`);
   }
-  if (review.length) {
-    const n = writeReview(review);
+  if (review.length || addedIds.length) {
+    const n = writeReview(review, addedIds);
     console.log(`Ter controle in ${path.relative(process.cwd(), FILES.review)} (${n} in totaal).`);
   }
 }

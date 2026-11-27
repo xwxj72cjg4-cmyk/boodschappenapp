@@ -2,6 +2,11 @@
 # Zet de inhoud van tijdlijnspel/ (zonder dit bouwgereedschap) in de branch "tijdlijn-site",
 # die Netlify publiceert. Draait in GitHub Actions; gebruik: publiceer-site.sh <token>
 set -euo pipefail
+# Alleen vanaf main: anders overschrijven runs op andere branches elkaars versie van de site.
+if [ "${GITHUB_REF_NAME:-main}" != "main" ]; then
+  echo "Site-branch niet bijgewerkt: dit is ${GITHUB_REF_NAME}, de site volgt alleen main."
+  exit 0
+fi
 repo_root="$(git rev-parse --show-toplevel)"
 site="$(mktemp -d)"
 cp -r "$repo_root/tijdlijnspel/." "$site/"

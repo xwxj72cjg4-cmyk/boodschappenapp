@@ -89,50 +89,123 @@
     return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
   }
 
+  // De zoekdiensten van Apple en Deezer sturen geen CORS-headers, dus een gewone fetch() wordt
+  // door de browser geblokkeerd. Beide bieden JSONP aan: het antwoord komt als script met een callback.
+  let jsonpCount = 0;
+  function jsonp(url, ms) {
+    return new Promise((resolve, reject) => {
+      const name = "tijdlijnJsonp" + ++jsonpCount;
+      const script = document.createElement("script");
+      let timer = 0;
+      const done = () => {
+        clearTimeout(timer);
+        window[name] = function () {}; // een te laat antwoord mag niets meer doen
+        if (script.parentNode) script.parentNode.removeChild(script);
+      };
+      timer = setTimeout(() => {
+        done();
+        reject(new Error("time-out"));
+      }, ms || 7000);
+      window[name] = (data) => {
+        done();
+        resolve(data);
+      };
+      script.onerror = () => {
+        done();
+        reject(new Error("niet geladen"));
+      };
+      script.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "callback=" + name;
+      document.head.appendChild(script);
+    });
+  }
+
+  function mainArtist(card) {
+    return card.sub.split(/ ft\.| feat\.| &/)[0];
+  }
+
+  // Beste treffer: artiest en begin van de titel kloppen, anders alleen de artiest.
+  function pickMatch(results, card, artistOf, titleOf) {
+    const artist = normalize(mainArtist(card));
+    const title = normalize(card.title).slice(0, 8);
+    return (
+      results.find((r) => normalize(artistOf(r)).includes(artist) && normalize(titleOf(r)).includes(title)) ||
+      results.find((r) => normalize(artistOf(r)).includes(artist)) ||
+      null
+    );
+  }
+
+  // Apple: kaarten uit de genre-database hebben al een vaste Apple-ID, de rest zoeken we op.
+  function itunesPreview(card) {
+    const term = encodeURIComponent((card.sub + " " + card.title).replace(/ft\.|feat\.|&/gi, " "));
+    const url = card.itunes
+      ? "https://itunes.apple.com/lookup?country=NL&id=" + card.itunes
+      : "https://itunes.apple.com/search?media=music&entity=song&limit=10&country=NL&term=" + term;
+    return jsonp(url).then((data) => {
+      const results = (data.results || []).filter((r) => r.previewUrl);
+      const best = (card.itunes && results[0]) || pickMatch(results, card, (r) => r.artistName, (r) => r.trackName);
+      return best ? best.previewUrl : null;
+    });
+  }
+
+  // Deezer als tweede bron: ook fragmenten van 30 seconden, zonder account.
+  function deezerPreview(card) {
+    const q = encodeURIComponent('artist:"' + mainArtist(card) + '" track:"' + card.title + '"');
+    return jsonp("https://api.deezer.com/search?limit=10&output=jsonp&q=" + q).then((data) => {
+      const results = (data.data || []).filter((r) => r.preview);
+      const best = pickMatch(results, card, (r) => (r.artist ? r.artist.name : ""), (r) => r.title);
+      return best ? best.preview : null;
+    });
+  }
+
+  const triedDeezer = new Set();
+
   function findPreview(card) {
     const key = card.sub + "|" + card.title;
     if (previewCache.has(key)) return previewCache.get(key);
-    const term = encodeURIComponent((card.sub + " " + card.title).replace(/ft\.|feat\.|&/gi, " "));
-    const controller = "AbortController" in window ? new AbortController() : null;
-    const timer = setTimeout(() => controller && controller.abort(), 7000);
-    // Kaarten uit de genre-database hebben al een vaste Apple-ID; de rest zoeken we op.
-    const promise = fetch(
-      card.itunes
-        ? "https://itunes.apple.com/lookup?country=NL&id=" + card.itunes
-        : "https://itunes.apple.com/search?media=music&entity=song&limit=10&country=NL&term=" + term,
-      controller ? { signal: controller.signal } : undefined
-    )
-      .then((r) => (r.ok ? r.json() : { results: [] }))
-      .then((data) => {
-        const results = (data.results || []).filter((r) => r.previewUrl);
-        const artist = normalize(card.sub.split(/ ft\.| feat\.| &/)[0]);
-        const title = normalize(card.title).slice(0, 8);
-        const best =
-          (card.itunes && results[0]) ||
-          results.find((r) => normalize(r.artistName).includes(artist) && normalize(r.trackName).includes(title)) ||
-          results.find((r) => normalize(r.artistName).includes(artist)) ||
-          null;
-        const url = best ? best.previewUrl : null;
-        previewReady.set(key, url);
-        return url;
-      })
+    const promise = itunesPreview(card)
       .catch(() => null)
       .then((url) => {
-        clearTimeout(timer);
+        if (url) return url;
+        triedDeezer.add(key);
+        return deezerPreview(card).catch(() => null);
+      })
+      .then((url) => {
+        previewReady.set(key, url);
         return url;
       });
     previewCache.set(key, promise);
     return promise;
   }
 
+  // Speelt het fragment van Apple niet af, dan het fragment van Deezer proberen.
+  function retryWithDeezer() {
+    const card = game && game.card;
+    if (!card || !card.music) return;
+    const key = card.sub + "|" + card.title;
+    if (triedDeezer.has(key)) {
+      game.preview = null;
+      game.revealedTitle = true;
+      if (screen === "play") render();
+      return;
+    }
+    triedDeezer.add(key);
+    deezerPreview(card)
+      .catch(() => null)
+      .then((url) => {
+        previewReady.set(key, url);
+        previewCache.set(key, Promise.resolve(url));
+        if (game.card !== card) return;
+        game.preview = url;
+        if (!url) game.revealedTitle = true;
+        if (screen === "play") render();
+      });
+  }
+
   function playFragment(fromTap) {
     if (audio.getAttribute("src") !== game.preview) audio.src = game.preview;
     audio.play().catch(() => {
       // Automatisch starten mag soms niet (browserbeleid); dan gewoon op de knop drukken.
-      if (fromTap) {
-        game.revealedTitle = true;
-        render();
-      }
+      // Speelt het bestand zelf niet, dan vangt de "error"-afhandeling dat op (Deezer proberen).
     });
   }
 
@@ -770,6 +843,10 @@
     game.slot = n;
     app.querySelectorAll(".slot").forEach((s) => s.classList.toggle("selected", +s.dataset.slot === n));
     slot.scrollIntoView && slot.scrollIntoView({ block: "nearest", inline: "center" });
+  });
+
+  audio.addEventListener("error", () => {
+    if (audio.getAttribute("src")) retryWithDeezer();
   });
 
   ["play", "pause", "ended"].forEach((ev) =>

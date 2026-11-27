@@ -1,5 +1,5 @@
 // Bewaart de app zelf offline. Muziekfragmenten komen altijd live van internet.
-const CACHE = "tijdlijn-v7";
+const CACHE = "tijdlijn-v8";
 const FILES = [
   "./",
   "index.html",
